@@ -13,6 +13,7 @@
   import { ownCompany } from "$lib/stores/ownCompany";
 
   export let data;
+  $: ownCompanyName = $ownCompany.name;
   let company = data?.company || null;
   let loading = false;
   let error = null;
@@ -82,6 +83,10 @@
     error = null;
 
     try {
+      if (!$ownCompany.name) {
+        throw new Error("Company name not loaded yet. Please try again.");
+      }
+
       const prompt = `Please provide a comprehensive research analysis for ${company.name} (${company.website}). Include:
       1. Company Overview
       2. Products/Services
@@ -89,6 +94,9 @@
       4. Key Strengths
       5. Potential Opportunities
       6. Recent Developments
+      
+      I am researching this company on behalf of ${$ownCompany.name}.
+      
       Please format the response in markdown and include citations in [square brackets] for any factual claims.`;
 
       // Use callProxy with the correct parameters
@@ -405,6 +413,10 @@
       loading = true;
       error = null;
 
+      if (!$ownCompany.name) {
+        throw new Error("Company name not loaded yet. Please try again.");
+      }
+
       const prompt = `Based on this company information, generate a cold calling script${selectedProspect ? ` for ${selectedProspect.name}` : ""}:
 
 ${selectedResearch ? `Research:\n${selectedResearch}\n` : ""}
@@ -422,8 +434,8 @@ Prospect Info:
     : ""
 }
 
-+ I am calling from ${$ownCompany.name}.
-+ 
+I am calling from ${$ownCompany.name}.
+
 Please generate a detailed cold calling guide including:
 1. Introduction${!selectedProspect ? " (Use [PROSPECT NAME] as placeholder)" : ""}
 2. Value proposition

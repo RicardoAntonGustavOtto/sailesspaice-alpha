@@ -13,53 +13,40 @@
   let isOpen = false;
   let companyName = "Loading...";
 
-  onMount(async () => {
+  async function loadData() {
     try {
-      const { data, error: fetchError } = await supabase
-        .from("masterdata")
-        .select("*")
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      masterData = data;
-      ownCompany.set({
-        name: masterData.company_name,
-        info: masterData.description,
-      });
-    } catch (err) {
-      error = err instanceof Error ? err.message : "Failed to load master data";
-    } finally {
-      loading = false;
-    }
-  });
-
-  async function loadCompanyName() {
-    try {
+      // Load company name
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user?.id) throw new Error("No user logged in");
 
-      const { data, error: err } = await supabase
+      const { data: companyData, error: companyError } = await supabase
         .from("owncompany")
-        .select("name")
+        .select("name, description")
         .eq("user_id", user.id)
         .single();
 
-      if (err) throw err;
+      if (companyError) throw companyError;
 
-      companyName = data?.name || "Your Company";
+      companyName = companyData?.name || "Your Company";
+
+      // Update the ownCompany store
+      ownCompany.set({
+        name: companyData.name,
+        info: companyData.description || "",
+      });
     } catch (err) {
-      console.error("Error loading company name:", err);
-      error =
-        err instanceof Error ? err.message : "Failed to load company name";
+      console.error("Error loading data:", err);
+      error = err instanceof Error ? err.message : "Failed to load data";
       companyName = "Your Company";
+    } finally {
+      loading = false;
     }
   }
 
   onMount(() => {
-    loadCompanyName();
+    loadData();
   });
 
   function toggleDropdown() {

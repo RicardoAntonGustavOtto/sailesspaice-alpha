@@ -2,24 +2,17 @@
 
 import { json } from "@sveltejs/kit";
 import { OPENAI_API_KEY } from "$env/static/private";
+import { createClient } from "@supabase/supabase-js";
 
-export async function POST({ request }) {
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_ANON_KEY
+);
+
+export async function POST({ request, locals }) {
+  const { targetCompany, prompt } = await request.json();
+
   try {
-    const { companyName, companyWebsite } = await request.json();
-
-    if (!companyName || !companyWebsite) {
-      return json({ error: "Missing required fields" }, { status: 400 });
-    }
-
-    const prompt = `Please provide a comprehensive research analysis for ${companyName} (${companyWebsite}). Include:
-    1. Company Overview
-    2. Products/Services
-    3. Market Position
-    4. Key Strengths
-    5. Potential Opportunities
-    6. Recent Developments
-    Please format the response in markdown.`;
-
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -44,9 +37,31 @@ export async function POST({ request }) {
     }
 
     const data = await response.json();
-    const research = data.choices[0].message.content;
+    const researchContent = data.choices[0].message.content;
 
-    return json({ research });
+    // Parse citations from the AI response
+    const citations = researchContent.match(/\[(.*?)\]/g) || [];
+    const cleanedCitations = citations.map((citation) =>
+      citation.replace(/[\[\]]/g, "")
+    );
+
+    // Update the targetcompanies table with both research and citations
+    const { data: updatedCompany, error: updateError } = await supabase
+      .from("targetcompanies")
+      .update({
+        research_result: researchContent,
+        research_citations: cleanedCitations, // Store citations as an array in the same row
+      })
+      .eq("name", targetCompany)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    return json({
+      research: updatedCompany,
+      citations: cleanedCitations,
+    });
   } catch (error) {
     console.error("Research generation error:", error);
     return json({ error: "Failed to generate research" }, { status: 500 });

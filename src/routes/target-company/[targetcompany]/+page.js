@@ -2,6 +2,7 @@
 
 import { error } from "@sveltejs/kit";
 import { redirect } from "@sveltejs/kit";
+import { supabase } from "$lib/supabase";
 
 export const load = async ({ params, parent }) => {
   // Wait for the parent layout load to complete
@@ -25,9 +26,20 @@ export const load = async ({ params, parent }) => {
       throw error(404, "Company not found");
     }
 
+    // Get latest company data to ensure we have current research and citations
+    const { data: latestCompany, error: companyError } = await supabase
+      .from("targetcompanies")
+      .select("*")
+      .eq("name", params.targetcompany)
+      .single();
+
+    if (companyError) throw companyError;
+
     return {
-      company,
+      company: latestCompany,
       session,
+      research: latestCompany.research_result,
+      citations: latestCompany.research_citations || [],
     };
   } catch (err) {
     const message =

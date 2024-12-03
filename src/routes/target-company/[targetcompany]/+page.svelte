@@ -4,7 +4,6 @@
   import { fade } from "svelte/transition";
   import { writable } from "svelte/store";
   import { browser } from "$app/environment";
-  import * as apiService from "$lib/services/apiService";
   import { marked } from "marked";
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
@@ -89,16 +88,25 @@
       4. Key Strengths
       5. Potential Opportunities
       6. Recent Developments
-      Please format the response in markdown.`;
+      Please format the response in markdown and include citations in [square brackets] for any factual claims.`;
 
       // Use callProxy with the correct parameters
-      const research = await callProxy(prompt, "openai", "gpt-4");
+      const research = await callProxy(
+        prompt,
+        "perplexity",
+        "llama-3.1-sonar-large-128k-online"
+      );
 
-      // Save to database
+      // Parse citations from the research content
+      const researchContent = research.choices[0].message.content;
+      const citations = research.citations || []; // Get citations directly from the research response
+
+      // Save to database with citations
       const { data: updatedCompany, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
-          research_result: research,
+          research_result: researchContent,
+          research_citations: citations,
         })
         .eq("id", company.id)
         .select()
@@ -112,8 +120,10 @@
       // Update sessionStorage
       sessionStorage.setItem("selectedCompany", JSON.stringify(company));
 
-      researchResult = research;
-      editedResearch = research;
+      // Update the research result state
+      researchResult = researchContent;
+      editedResearch = researchContent;
+      // Citations are already updated in company object through updatedCompany
     } catch (err) {
       error = "Failed to generate AI research. Please try again.";
       console.error("AI Research failed:", err);
@@ -573,6 +583,30 @@ Please generate a detailed cold calling guide including:
       error = err.message;
     }
   }
+
+  let research = "";
+  let citations = [];
+
+  async function generateResearch() {
+    loading = true;
+    try {
+      const response = await fetch("/api/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetCompany: data.targetCompany,
+          prompt: "Research about " + data.targetCompany,
+        }),
+      });
+      const result = await response.json();
+      research = result.research.content;
+      citations = result.citations || []; // Get citations directly from the response
+    } catch (error) {
+      console.error("Error:", error);
+    } finally {
+      loading = false;
+    }
+  }
 </script>
 
 <div class="max-w-7xl mx-auto p-6">
@@ -691,6 +725,25 @@ Please generate a detailed cold calling guide including:
               <div class="markdown-content">
                 {@html renderMarkdown(company.research_result)}
               </div>
+              {#if company?.research_citations?.length > 0}
+                <div class="mt-6 border-t pt-4">
+                  <h3 class="text-lg font-semibold mb-2">Sources:</h3>
+                  <ul class="pl-5 list-none space-y-2">
+                    {#each company.research_citations as citation}
+                      <li>
+                        <a
+                          href={citation}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {citation}
+                        </a>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
             </div>
           {:else}
             <p class="text-gray-500">No research available.</p>
@@ -929,7 +982,7 @@ Please generate a detailed cold calling guide including:
       on:click|self={closeResearchModal}
     >
       <div
-        class="bg-white p-6 rounded-lg w-full max-w-4xl mx-4 shadow-xl max-h-[90vh] flex flex-col"
+        class="bg-white p-6 rounded-lg w-full max-w-4xl mx-4 shadow-xl h-[90vh] flex flex-col overflow-hidden"
         on:click|stopPropagation
       >
         <div class="flex justify-between items-start mb-4">
@@ -955,29 +1008,54 @@ Please generate a detailed cold calling guide including:
           </div>
         {:else}
           <form
-            class="flex flex-col flex-grow"
+            class="flex flex-col flex-grow overflow-hidden"
             on:submit|preventDefault={saveResearch}
           >
-            <textarea
-              bind:value={editedResearch}
-              class="w-full flex-grow p-4 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:border-black focus:ring-1 focus:ring-black resize-none transition-all duration-200 min-h-[60vh] font-mono text-sm leading-relaxed"
-              placeholder="AI research results will appear here..."
-            ></textarea>
-            <div class="flex justify-end gap-3">
-              <button
-                type="button"
-                class="px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
-                on:click={closeResearchModal}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200"
-                disabled={loading}
-              >
-                {loading ? "Saving..." : "Save Research"}
-              </button>
+            <div class="flex flex-col flex-grow overflow-auto">
+              <textarea
+                bind:value={editedResearch}
+                class="w-full p-4 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:border-black focus:ring-1 focus:ring-black resize-none transition-all duration-200 flex-grow font-mono text-sm leading-relaxed min-h-[50vh]"
+                placeholder="AI research results will appear here..."
+              ></textarea>
+
+              <div class="space-y-4 flex-shrink-0 mt-auto">
+                {#if company?.research_citations?.length > 0}
+                  <div class="border-t pt-4">
+                    <h3 class="text-lg font-semibold mb-2">Sources:</h3>
+                    <ul class="pl-5 list-none space-y-2">
+                      {#each company.research_citations as citation}
+                        <li>
+                          <a
+                            href={citation}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                          >
+                            {citation}
+                          </a>
+                        </li>
+                      {/each}
+                    </ul>
+                  </div>
+                {/if}
+
+                <div class="flex justify-end gap-3">
+                  <button
+                    type="button"
+                    class="px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+                    on:click={closeResearchModal}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200"
+                    disabled={loading}
+                  >
+                    {loading ? "Saving..." : "Save Research"}
+                  </button>
+                </div>
+              </div>
             </div>
           </form>
         {/if}
@@ -1524,6 +1602,36 @@ Please generate a detailed cold calling guide including:
             </button>
           </div>
         </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if research}
+    <div class="mt-6 prose prose-slate max-w-none">
+      <div class="bg-white rounded-lg shadow p-6">
+        <div class="mb-6">
+          {@html research}
+        </div>
+
+        {#if company?.research_citations?.length > 0}
+          <div class="mt-6 border-t pt-4">
+            <h3 class="text-lg font-semibold mb-2">Sources:</h3>
+            <ul class="pl-5 list-none space-y-2">
+              {#each company.research_citations as citation}
+                <li>
+                  <a
+                    href={citation}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                  >
+                    {citation}
+                  </a>
+                </li>
+              {/each}
+            </ul>
+          </div>
+        {/if}
       </div>
     </div>
   {/if}

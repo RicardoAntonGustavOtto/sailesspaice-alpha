@@ -25,10 +25,7 @@
       masterData = data;
       ownCompany.set({
         name: masterData.company_name,
-        info: {
-          vision: masterData.vision,
-          mission: masterData.mission,
-        },
+        info: masterData.description,
       });
     } catch (err) {
       error = err instanceof Error ? err.message : "Failed to load master data";

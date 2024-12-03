@@ -30,7 +30,7 @@ export const load = async ({ params, parent }) => {
     const { data: latestCompany, error: companyError } = await supabase
       .from("targetcompanies")
       .select("*")
-      .eq("name", params.targetcompany)
+      .eq("id", company.id)
       .single();
 
     if (companyError) throw companyError;

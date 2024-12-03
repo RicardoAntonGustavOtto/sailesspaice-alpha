@@ -9,8 +9,6 @@
   import Breadcrumbs from "$lib/components/Breadcrumbs.svelte";
   import "../app.css";
 
-  let isCollapsed = false;
-
   onMount(() => {
     if (browser && !$user && !$page.url.pathname.startsWith("/login")) {
       goto("/login");
@@ -27,33 +25,10 @@
     <slot />
   {:else}
     <div class="flex min-h-screen bg-gray-50">
-      <div class="transition-all duration-300 {isCollapsed ? 'collapsed' : ''}">
-        <AppSidebar />
-      </div>
+      <AppSidebar />
       <div class="flex-1">
         <header class="flex h-14 items-center border-b bg-white px-4">
           <Breadcrumbs />
-          <button
-            class="ml-auto rounded-full p-2 text-gray-500 hover:bg-gray-100"
-            on:click={() => (isCollapsed = !isCollapsed)}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="h-5 w-5"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            >
-              {#if isCollapsed}
-                <path d="M13 5l7 7-7 7M5 5l7 7-7 7" />
-              {:else}
-                <path d="M11 19l-7-7 7-7M19 19l-7-7 7-7" />
-              {/if}
-            </svg>
-          </button>
         </header>
         <main class="p-4">
           <slot />

@@ -9,6 +9,8 @@
   import { onMount } from "svelte";
   import { supabase } from "$lib/supabase";
   import { enhance } from "$app/forms";
+  import { callProxy } from "$lib/services/apiService";
+  import { goto } from "$app/navigation";
 
   export let data;
   let company = data?.company || null;
@@ -80,17 +82,23 @@
     error = null;
 
     try {
-      // Generate research content
-      const result = await apiService.generateCompanyResearch(
-        company.name,
-        company.website
-      );
+      const prompt = `Please provide a comprehensive research analysis for ${company.name} (${company.website}). Include:
+      1. Company Overview
+      2. Products/Services
+      3. Market Position
+      4. Key Strengths
+      5. Potential Opportunities
+      6. Recent Developments
+      Please format the response in markdown.`;
+
+      // Use callProxy with the correct parameters
+      const research = await callProxy(prompt, "openai", "gpt-4");
 
       // Save to database
-      const { data, error: updateError } = await supabase
+      const { data: updatedCompany, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
-          research_result: result,
+          research_result: research,
         })
         .eq("id", company.id)
         .select()
@@ -99,13 +107,13 @@
       if (updateError) throw updateError;
 
       // Update local state
-      company = data;
+      company = updatedCompany;
 
       // Update sessionStorage
       sessionStorage.setItem("selectedCompany", JSON.stringify(company));
 
-      researchResult = result;
-      editedResearch = result;
+      researchResult = research;
+      editedResearch = research;
     } catch (err) {
       error = "Failed to generate AI research. Please try again.";
       console.error("AI Research failed:", err);
@@ -118,8 +126,11 @@
     if (!company || !editedResearch) return;
 
     try {
+      loading = true;
+      error = null;
+
       // Update research directly in targetcompanies
-      const { data, error: updateError } = await supabase
+      const { data: updatedCompany, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
           research_result: editedResearch,
@@ -131,16 +142,21 @@
       if (updateError) throw updateError;
 
       // Update local state
-      company = data;
+      company = updatedCompany;
 
       // Update sessionStorage
       sessionStorage.setItem("selectedCompany", JSON.stringify(company));
+
+      // Update the research result state
+      researchResult = editedResearch;
 
       // Close modal
       closeResearchModal();
     } catch (err) {
       console.error("Error saving research:", err);
       error = err.message;
+    } finally {
+      loading = false;
     }
   }
 
@@ -159,14 +175,49 @@
     uploadProgress = 0;
 
     try {
-      // Read file content as text
-      const text = await file.text();
+      let content;
+      if (file.type === "application/pdf") {
+        // For PDF files, we'll store the file itself
+        const formData = new FormData();
+        formData.append("file", file);
+
+        // Changed bucket name to match the one we use for retrieval
+        const { data: uploadResult, error: uploadError } =
+          await supabase.storage
+            .from("salesspaice-files") // Make sure this matches exactly
+            .upload(`${company.id}/${file.name}`, file, {
+              cacheControl: "3600",
+              upsert: true, // This will overwrite if file exists
+            });
+
+        if (uploadError) throw uploadError;
+
+        // Get the public URL using the same bucket name
+        const {
+          data: { publicUrl },
+        } = supabase.storage
+          .from("salesspaice-files")
+          .getPublicUrl(`${company.id}/${file.name}`);
+
+        content = {
+          type: "pdf",
+          url: publicUrl,
+          fileName: file.name,
+        };
+      } else {
+        // For text files, read the content directly
+        content = {
+          type: "text",
+          content: await file.text(),
+          fileName: file.name,
+        };
+      }
 
       // Update company record with file content
       const { data, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
-          annual_report: text,
+          annual_report: content,
         })
         .eq("id", company.id)
         .select()
@@ -183,6 +234,7 @@
       uploadProgress = 100;
     } catch (err) {
       uploadError = err.message;
+      console.error("Upload error:", err);
     } finally {
       uploadLoading = false;
       if (fileInput) fileInput.value = "";
@@ -321,10 +373,10 @@
   }
 
   // Add these new variables
-  let showColdCallModal = false;
-  let selectedProspect = null;
   let selectedResearch = null;
   let selectedReport = null;
+  let selectedProspect = null;
+  let showColdCallModal = false;
 
   function openColdCallModal() {
     showColdCallModal = true;
@@ -338,30 +390,57 @@
   }
 
   async function generateColdCall() {
-    if (!company?.research_result) {
-      error = "No research available to generate guide";
+    // Check if at least one of research, report, or prospect is selected
+    if (!selectedResearch && !selectedReport && !selectedProspect) {
+      error = "Please select at least one item (Research, Report, or Prospect)";
       return;
     }
 
     try {
+      loading = true;
+      error = null;
+
+      const prompt = `Based on this company information, generate a cold calling script${selectedProspect ? ` for ${selectedProspect.name}` : ""}:
+
+${selectedResearch ? `Research:\n${selectedResearch}\n` : ""}
+${selectedReport ? `Annual Report:\n${selectedReport}\n` : ""}
+${
+  selectedProspect
+    ? `
+Prospect Info:
+- Name: ${selectedProspect.name}
+- Title: ${selectedProspect.title}
+- Email: ${selectedProspect.email}
+- Phone: ${selectedProspect.phone}
+- Notes: ${selectedProspect.notes || "No notes"}
+`
+    : ""
+}
+
+Please generate a detailed cold calling guide including:
+1. Introduction${!selectedProspect ? " (Use [PROSPECT NAME] as placeholder)" : ""}
+2. Value proposition
+3. Key talking points
+4. Handling objections
+5. Next steps`;
+
+      // Generate the guide content using callProxy
+      const guideContent = await callProxy(prompt, "openai", "gpt-4");
+
       const guide = {
         id: crypto.randomUUID(),
-        prospect: selectedProspect,
-        content: `# Cold Calling Guide for ${selectedProspect.name}
-
-## Research Summary
-${company.research_result}
-
-## Key Points
-- Position: ${selectedProspect.title}
-- Contact: ${selectedProspect.email} / ${selectedProspect.phone}
-
-## Notes
-${selectedProspect.notes}`,
+        prospect: selectedProspect || {
+          name: "[PROSPECT NAME]",
+          title: "Unknown",
+          email: "",
+          phone: "",
+          notes: "Generic guide",
+        },
+        content: guideContent,
         generated_at: new Date().toISOString(),
       };
 
-      const { data, error: updateError } = await supabase
+      const { data: updatedCompany, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
           cold_calling_guides: [...(company.cold_calling_guides || []), guide],
@@ -373,7 +452,7 @@ ${selectedProspect.notes}`,
       if (updateError) throw updateError;
 
       // Update local state
-      company = data;
+      company = updatedCompany;
 
       // Update sessionStorage
       sessionStorage.setItem("selectedCompany", JSON.stringify(company));
@@ -381,6 +460,116 @@ ${selectedProspect.notes}`,
       closeColdCallModal();
     } catch (err) {
       console.error("Error generating cold call guide:", err);
+      error = err.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function deleteCompany() {
+    if (!confirm("Are you sure you want to delete this company?")) return;
+
+    try {
+      const { error: deleteError } = await supabase
+        .from("targetcompanies")
+        .delete()
+        .eq("id", company.id);
+
+      if (deleteError) throw deleteError;
+
+      // Use goto instead of window.location
+      await goto("/target-company", { replaceState: true });
+    } catch (err) {
+      console.error("Error deleting company:", err);
+      error = err.message;
+    }
+  }
+
+  async function deleteProspect(prospectId) {
+    if (!confirm("Are you sure you want to delete this prospect?")) return;
+
+    try {
+      const updatedProspects = company.prospects.filter(
+        (p) => p.id !== prospectId
+      );
+
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          prospects: updatedProspects,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      company = updatedCompany;
+    } catch (err) {
+      console.error("Error deleting prospect:", err);
+      error = err.message;
+    }
+  }
+
+  async function deleteGuide(guideId) {
+    if (!confirm("Are you sure you want to delete this guide?")) return;
+
+    try {
+      const updatedGuides = company.cold_calling_guides.filter(
+        (g) => g.id !== guideId
+      );
+
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          cold_calling_guides: updatedGuides,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      company = updatedCompany;
+    } catch (err) {
+      console.error("Error deleting guide:", err);
+      error = err.message;
+    }
+  }
+
+  // Add this function to handle file deletion
+  async function deleteAnnualReport() {
+    if (!confirm("Are you sure you want to delete this annual report?")) return;
+
+    try {
+      // First delete from storage if it's a PDF
+      if (company.annual_report.type === "pdf") {
+        const { error: storageError } = await supabase.storage
+          .from("salesspaice-files")
+          .remove([`${company.id}/${company.annual_report.fileName}`]);
+
+        if (storageError) throw storageError;
+      }
+
+      // Then update the company record
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          annual_report: null,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      company = updatedCompany;
+
+      // Update sessionStorage
+      sessionStorage.setItem("selectedCompany", JSON.stringify(company));
+    } catch (err) {
+      console.error("Error deleting annual report:", err);
       error = err.message;
     }
   }
@@ -432,27 +621,47 @@ ${selectedProspect.notes}`,
             </div>
           </div>
         </div>
-        <button
-          on:click={openEditModal}
-          class="p-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
-          title="Edit Company"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-5 w-5"
-            viewBox="0 0 20 20"
-            fill="currentColor"
+        <div class="flex gap-2">
+          <button
+            on:click={openEditModal}
+            class="p-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
+            title="Edit Company"
           >
-            <path
-              d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"
-            />
-            <path
-              fill-rule="evenodd"
-              d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
-              clip-rule="evenodd"
-            />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"
+              />
+              <path
+                fill-rule="evenodd"
+                d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </button>
+          <button
+            on:click={deleteCompany}
+            class="p-2 text-red-600 hover:text-red-800 transition-all duration-200"
+            title="Delete Company"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-5 w-5"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fill-rule="evenodd"
+                d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                clip-rule="evenodd"
+              />
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -497,16 +706,84 @@ ${selectedProspect.notes}`,
         <div class="space-y-4">
           {#if company.annual_report}
             <div class="border rounded-lg p-6 bg-white">
-              <pre class="whitespace-pre-wrap">{company.annual_report}</pre>
+              <!-- File info header -->
+              <div class="flex justify-between items-start">
+                <div>
+                  <h3 class="font-medium text-gray-900">
+                    {company.annual_report.fileName}
+                  </h3>
+                  <p class="text-sm text-gray-500">
+                    Type: {company.annual_report.type === "pdf"
+                      ? "PDF Document"
+                      : "Text File"}
+                  </p>
+                </div>
+                <div class="flex gap-2">
+                  {#if company.annual_report.type === "pdf"}
+                    <a
+                      href={supabase.storage
+                        .from("salesspaice-files")
+                        .getPublicUrl(
+                          `${company.id}/${company.annual_report.fileName}`
+                        ).data.publicUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="p-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
+                      title="View Document"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                        <path
+                          fill-rule="evenodd"
+                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </a>
+                  {/if}
+                  <button
+                    on:click={deleteAnnualReport}
+                    class="p-2 text-red-600 hover:text-red-800 transition-all duration-200"
+                    title="Delete Annual Report"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-5 w-5"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Only show content for text files -->
+              {#if company.annual_report.type === "text"}
+                <div class="mt-4">
+                  <pre class="whitespace-pre-wrap">{company.annual_report
+                      .content}</pre>
+                </div>
+              {/if}
             </div>
           {:else}
             <p class="text-gray-500">No annual report available.</p>
           {/if}
 
+          <!-- Upload button section -->
           <div class="mt-6">
             <input
               type="file"
-              accept=".txt"
+              accept=".txt,.pdf"
               bind:this={fileInput}
               on:change={handleFileUpload}
               class="hidden"
@@ -550,12 +827,34 @@ ${selectedProspect.notes}`,
                       {prospect.title || "No title"}
                     </p>
                   </div>
-                  <div class="text-right">
-                    <p class="text-sm text-gray-600">{prospect.email}</p>
-                    <p class="text-sm text-gray-600">{prospect.phone}</p>
-                    <p class="text-xs text-gray-400">
-                      Added: {new Date(prospect.dateAdded).toLocaleDateString()}
-                    </p>
+                  <div class="flex gap-2">
+                    <div class="text-right">
+                      <p class="text-sm text-gray-600">{prospect.email}</p>
+                      <p class="text-sm text-gray-600">{prospect.phone}</p>
+                      <p class="text-xs text-gray-400">
+                        Added: {new Date(
+                          prospect.dateAdded
+                        ).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <button
+                      on:click={() => deleteProspect(prospect.id)}
+                      class="p-1 text-red-600 hover:text-red-800 transition-all duration-200"
+                      title="Delete Prospect"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-4 w-4"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
                   </div>
                 </div>
                 <p class="text-gray-600 mt-2">{prospect.notes || "No notes"}</p>
@@ -585,6 +884,24 @@ ${selectedProspect.notes}`,
                       ).toLocaleDateString()}
                     </p>
                   </div>
+                  <button
+                    on:click={() => deleteGuide(guide.id)}
+                    class="p-1 text-red-600 hover:text-red-800 transition-all duration-200"
+                    title="Delete Guide"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-4 w-4"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </button>
                 </div>
                 <div class="markdown-content mt-4">
                   {@html renderMarkdown(guide.content)}
@@ -612,7 +929,7 @@ ${selectedProspect.notes}`,
       on:click|self={closeResearchModal}
     >
       <div
-        class="bg-white p-6 rounded-lg w-full max-w-4xl mx-4 shadow-xl min-h-[80vh] flex flex-col"
+        class="bg-white p-6 rounded-lg w-full max-w-4xl mx-4 shadow-xl max-h-[90vh] flex flex-col"
         on:click|stopPropagation
       >
         <div class="flex justify-between items-start mb-4">
@@ -621,7 +938,7 @@ ${selectedProspect.notes}`,
             class="text-gray-500 hover:text-gray-700"
             on:click={closeResearchModal}
           >
-            âœ•
+            ×
           </button>
         </div>
 
@@ -638,20 +955,12 @@ ${selectedProspect.notes}`,
           </div>
         {:else}
           <form
-            method="POST"
-            use:enhance={() => {
-              return async ({ result }) => {
-                if (result.type === "success") {
-                  closeResearchModal();
-                }
-              };
-            }}
+            class="flex flex-col flex-grow"
+            on:submit|preventDefault={saveResearch}
           >
-            <input type="hidden" name="action" value="updateResearch" />
             <textarea
-              name="content"
               bind:value={editedResearch}
-              class="w-full flex-grow p-4 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:border-black focus:ring-1 focus:ring-black resize-none transition-all duration-200"
+              class="w-full flex-grow p-4 border border-gray-200 rounded-lg mb-4 focus:outline-none focus:border-black focus:ring-1 focus:ring-black resize-none transition-all duration-200 min-h-[60vh] font-mono text-sm leading-relaxed"
               placeholder="AI research results will appear here..."
             ></textarea>
             <div class="flex justify-end gap-3">
@@ -665,8 +974,9 @@ ${selectedProspect.notes}`,
               <button
                 type="submit"
                 class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200"
+                disabled={loading}
               >
-                Save Research
+                {loading ? "Saving..." : "Save Research"}
               </button>
             </div>
           </form>
@@ -1001,7 +1311,7 @@ ${selectedProspect.notes}`,
             class="text-gray-500 hover:text-gray-700"
             on:click={closeColdCallModal}
           >
-            âœ•
+            ×
           </button>
         </div>
 
@@ -1009,55 +1319,56 @@ ${selectedProspect.notes}`,
           <!-- AI Research Section -->
           <div class="border rounded-lg p-4">
             <h3 class="font-semibold mb-3">AI Research</h3>
-            {#if company.prospectResearch && company.prospectResearch.length > 0}
+            {#if company.research_result}
               <div class="space-y-2">
-                {#each company.prospectResearch as research}
-                  <label
-                    class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedResearch ===
-                    research
-                      ? 'bg-gray-50 border-gray-200'
-                      : ''}"
+                <label
+                  class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedResearch ===
+                  company.research_result
+                    ? 'bg-gray-50 border-gray-200'
+                    : ''}"
+                >
+                  <div
+                    class="relative flex items-center justify-center w-5 h-5 mt-0.5"
                   >
+                    <input
+                      type="radio"
+                      name="research"
+                      class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
+                      bind:group={selectedResearch}
+                      value={company.research_result}
+                    />
                     <div
-                      class="relative flex items-center justify-center w-5 h-5 mt-0.5"
+                      class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
+                    ></div>
+                    <svg
+                      class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
                     >
-                      <input
-                        type="radio"
-                        name="research"
-                        class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
-                        bind:group={selectedResearch}
-                        value={research}
-                      />
-                      <div
-                        class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
-                      ></div>
-                      <svg
-                        class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M5 13l4 4L19 7"
-                        ></path>
-                      </svg>
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      ></path>
+                    </svg>
+                  </div>
+                  <div class="flex-grow">
+                    <div class="font-medium">Company Research</div>
+                    <div class="text-sm text-gray-500 mt-2 line-clamp-2">
+                      {company.research_result.substring(0, 150)}...
                     </div>
-                    <div class="flex-grow">
-                      <div class="font-medium">{research.title}</div>
-                      <div class="text-sm text-gray-500">
-                        Added: {new Date(research.date).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </label>
-                {/each}
+                  </div>
+                </label>
               </div>
             {:else}
               <div class="text-gray-500 mb-3">No AI research available.</div>
               <button
-                on:click={handleAIResearch}
+                on:click={() => {
+                  closeColdCallModal();
+                  handleAIResearch();
+                }}
                 class="px-3 py-1 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
               >
                 Generate AI Research First
@@ -1204,11 +1515,12 @@ ${selectedProspect.notes}`,
             <button
               class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               on:click={generateColdCall}
-              disabled={!selectedProspect &&
-                !selectedResearch &&
-                !selectedReport}
+              disabled={(!selectedResearch &&
+                !selectedReport &&
+                !selectedProspect) ||
+                loading}
             >
-              Generate Guide
+              {loading ? "Generating..." : "Generate Guide"}
             </button>
           </div>
         </div>

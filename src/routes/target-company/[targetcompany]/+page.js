@@ -35,3 +35,5 @@ export const load = async ({ params, parent }) => {
     throw error(500, message);
   }
 };
+
+export const prerender = false;

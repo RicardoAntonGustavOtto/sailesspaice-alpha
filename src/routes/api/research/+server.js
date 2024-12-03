@@ -1,38 +1,54 @@
 /** @format */
 
 import { json } from "@sveltejs/kit";
+import { OPENAI_API_KEY } from "$env/static/private";
 
 export async function POST({ request }) {
   try {
     const { companyName, companyWebsite } = await request.json();
 
-    // Here you would typically call your AI service
-    // For now, let's return a mock response
-    const research = `
-# Research Report for ${companyName}
+    if (!companyName || !companyWebsite) {
+      return json({ error: "Missing required fields" }, { status: 400 });
+    }
 
-## Company Overview
-${companyName} is a company that can be found at ${companyWebsite}.
+    const prompt = `Please provide a comprehensive research analysis for ${companyName} (${companyWebsite}). Include:
+    1. Company Overview
+    2. Products/Services
+    3. Market Position
+    4. Key Strengths
+    5. Potential Opportunities
+    6. Recent Developments
+    Please format the response in markdown.`;
 
-## Key Findings
-1. Company operates in the technology sector
-2. Has a strong online presence
-3. Offers various products and services
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
+    });
 
-## Recommendations
-1. Reach out via LinkedIn
-2. Focus on their pain points
-3. Prepare case studies
+    if (!response.ok) {
+      throw new Error("OpenAI API request failed");
+    }
 
-## Next Steps
-1. Connect with decision makers
-2. Schedule initial meeting
-3. Present tailored solution
-    `;
+    const data = await response.json();
+    const research = data.choices[0].message.content;
 
     return json({ research });
   } catch (error) {
-    console.error("Research generation failed:", error);
+    console.error("Research generation error:", error);
     return json({ error: "Failed to generate research" }, { status: 500 });
   }
 }

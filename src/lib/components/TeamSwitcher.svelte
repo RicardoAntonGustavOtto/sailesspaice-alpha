@@ -1,12 +1,41 @@
 <!-- @format -->
 <script>
+  import { page } from "$app/stores";
+  import { supabase } from "$lib/supabase";
+  import { ownCompany } from "$lib/stores/ownCompany";
+  import { fade } from "svelte/transition";
   import { ChevronsUpDown } from "lucide-svelte";
   import { onMount } from "svelte";
-  import { supabase } from "$lib/supabase";
 
+  let masterData = null;
+  let loading = true;
+  let error = null;
   let isOpen = false;
   let companyName = "Loading...";
-  let error = null;
+
+  onMount(async () => {
+    try {
+      const { data, error: fetchError } = await supabase
+        .from("masterdata")
+        .select("*")
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      masterData = data;
+      ownCompany.set({
+        name: masterData.company_name,
+        info: {
+          vision: masterData.vision,
+          mission: masterData.mission,
+        },
+      });
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Failed to load master data";
+    } finally {
+      loading = false;
+    }
+  });
 
   async function loadCompanyName() {
     try {
@@ -26,7 +55,8 @@
       companyName = data?.name || "Your Company";
     } catch (err) {
       console.error("Error loading company name:", err);
-      error = err.message;
+      error =
+        err instanceof Error ? err.message : "Failed to load company name";
       companyName = "Your Company";
     }
   }

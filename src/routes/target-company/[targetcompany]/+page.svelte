@@ -10,6 +10,7 @@
   import { enhance } from "$app/forms";
   import { callProxy } from "$lib/services/apiService";
   import { goto } from "$app/navigation";
+  import { ownCompany } from "$lib/stores/ownCompany";
 
   export let data;
   let company = data?.company || null;
@@ -400,12 +401,6 @@
   }
 
   async function generateColdCall() {
-    // Check if at least one of research, report, or prospect is selected
-    if (!selectedResearch && !selectedReport && !selectedProspect) {
-      error = "Please select at least one item (Research, Report, or Prospect)";
-      return;
-    }
-
     try {
       loading = true;
       error = null;
@@ -427,6 +422,8 @@ Prospect Info:
     : ""
 }
 
++ I am calling from ${$ownCompany.name}.
++ 
 Please generate a detailed cold calling guide including:
 1. Introduction${!selectedProspect ? " (Use [PROSPECT NAME] as placeholder)" : ""}
 2. Value proposition

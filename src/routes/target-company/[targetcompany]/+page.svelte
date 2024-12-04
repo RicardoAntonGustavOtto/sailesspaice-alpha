@@ -11,6 +11,7 @@
   import { callProxy } from "$lib/services/apiService";
   import { goto } from "$app/navigation";
   import { ownCompany } from "$lib/stores/ownCompany";
+  import { getPrompt } from "$lib/services/promptManager";
 
   export let data;
   $: ownCompanyName = $ownCompany.name;
@@ -73,11 +74,13 @@
   }
 
   async function handleAIResearch() {
+    // Check if company info is missing
     if (!company?.name || !company?.website) {
       error = "Company information is missing";
       return;
     }
 
+    // Modal & Error handling
     showResearchModal = true;
     researchLoading = true;
     error = null;
@@ -87,24 +90,13 @@
         throw new Error("Company name not loaded yet. Please try again.");
       }
 
-      const prompt = `Please provide a comprehensive research analysis for ${company.name} (${company.website}). Include:
-      1. Company Overview
-      2. Products/Services
-      3. Market Position
-      4. Key Strengths
-      5. Potential Opportunities
-      6. Recent Developments
-      
-      I am researching this company on behalf of ${$ownCompany.name}.
-      
-      Please format the response in markdown and include citations in [square brackets] for any factual claims.`;
+      // Get the right prompt
+      const { prompt, model, provider } = getPrompt("research_targetcompany", {
+        targetcompany_name: company.name,
+        targetcompany_website: company.website,
+      });
 
-      // Use callProxy with the correct parameters
-      const research = await callProxy(
-        prompt,
-        "perplexity",
-        "llama-3.1-sonar-large-128k-online"
-      );
+      const research = await callProxy(prompt, provider, model);
 
       // Parse citations from the research content
       const researchContent = research.choices[0].message.content;
@@ -417,34 +409,28 @@
         throw new Error("Company name not loaded yet. Please try again.");
       }
 
-      const prompt = `Based on this company information, generate a cold calling script${selectedProspect ? ` for ${selectedProspect.name}` : ""}:
+      // Get the right prompt
+      const { prompt, model, provider } = getPrompt(
+        "generate_targetcompany_coldcallingguide",
+        {
+          prospect_name: selectedProspect
+            ? ` for ${selectedProspect.name}`
+            : "",
+          targetcompany_research: selectedResearch
+            ? `Research:\n${selectedResearch}\n`
+            : "",
+          targetcompany_annualreport: selectedReport
+            ? `Annual Report:\n${selectedReport}\n`
+            : "",
+          prospect_info: selectedProspect ? `...` : "",
+          owncompany_name: $ownCompany.name,
+          prospectPlaceholder: !selectedProspect
+            ? " (Use [PROSPECT NAME] as placeholder)"
+            : "",
+        }
+      );
 
-${selectedResearch ? `Research:\n${selectedResearch}\n` : ""}
-${selectedReport ? `Annual Report:\n${selectedReport}\n` : ""}
-${
-  selectedProspect
-    ? `
-Prospect Info:
-- Name: ${selectedProspect.name}
-- Title: ${selectedProspect.title}
-- Email: ${selectedProspect.email}
-- Phone: ${selectedProspect.phone}
-- Notes: ${selectedProspect.notes || "No notes"}
-`
-    : ""
-}
-
-I am calling from ${$ownCompany.name}.
-
-Please generate a detailed cold calling guide including:
-1. Introduction${!selectedProspect ? " (Use [PROSPECT NAME] as placeholder)" : ""}
-2. Value proposition
-3. Key talking points
-4. Handling objections
-5. Next steps`;
-
-      // Generate the guide content using callProxy
-      const guideContent = await callProxy(prompt, "openai", "gpt-4");
+      const guideContent = await callProxy(prompt, provider, model);
 
       const guide = {
         id: crypto.randomUUID(),

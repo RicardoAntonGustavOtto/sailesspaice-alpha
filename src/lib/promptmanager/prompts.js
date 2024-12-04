@@ -1,0 +1,37 @@
+/** @format */
+
+export const prompts = {
+  prompts: {
+    targetcompany_research: {
+      id: "research_targetcompany",
+      model: "llama-3.1-sonar-large-128k-online",
+      provider: "perplexity",
+      content: `You are an expert at researching companies and writing detailed descriptions of the products and services they provide and the benefits they provide their customers.
+
+      Please research the company {{targetcompany_name}} and write a comprehensive description of (1) their products and services and (2) the benefits they provide their customers. Your only source for information should be their own website. Here is the URL: {{targetcompany_website}}
+
+      Your research results should include naming the location of the company's headquarters. You must use the company headquarters location as a quality check for your other research. Do not include sources that have no logical connection to that location. Be very cautious to avoid referencing sources or companies that may not be related to {{targetcompany_name}}.
+
+      Important: You may only reference {{targetcompany_name}}'s official website.`,
+    },
+    cold_calling: {
+      id: "generate_targetcompany_coldcallingguide",
+      model: "gpt-4",
+      provider: "openai",
+      content: `Based on this company information, generate a cold calling script{{prospectName}}.
+
+      {{targetcompany_research}}
+      {{targetcompany_annualreport}}
+      {{prospect_info}}
+
+      I am calling from {{owncompany_name}}.
+
+      Please generate a detailed cold calling guide including:
+      1. Introduction{{prospect_name}}
+      2. Value proposition
+      3. Key talking points
+      4. Handling objections
+      5. Next steps`,
+    },
+  },
+};

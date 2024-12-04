@@ -131,28 +131,6 @@
         {/if}
         Sign in
       </button>
-
-      <div class="relative my-8">
-        <div class="absolute inset-0 flex items-center">
-          <div class="w-full border-t" />
-        </div>
-        <div class="relative flex justify-center text-sm">
-          <span class="bg-white px-2 text-gray-500">or continue with</span>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        on:click={handleSignInWithGoogle}
-        class="btn btn-secondary w-full flex items-center justify-center gap-2"
-      >
-        <img
-          src="https://www.svgrepo.com/show/475656/google-color.svg"
-          alt="Google"
-          class="h-5 w-5"
-        />
-        <span>Google</span>
-      </button>
     </form>
   </div>
 </div>

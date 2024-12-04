@@ -5,12 +5,14 @@
   import { user } from "$lib/stores/authStore";
   import { fade } from "svelte/transition";
 
-  let email = "";
+  let username = "";
+
   let password = "";
   let loading = false;
   let error = "";
 
   async function handleLogin() {
+    let email = username + "@salesspaice.com";
     try {
       loading = true;
       error = "";
@@ -85,17 +87,17 @@
       <div class="space-y-4">
         <div>
           <label
-            for="email"
-            class="block text-sm font-medium text-gray-700 mb-1">Email</label
+            for="username"
+            class="block text-sm font-medium text-gray-700 mb-1">Username</label
           >
           <input
-            id="email"
-            name="email"
-            type="email"
+            id="username"
+            name="username"
+            type="text"
             required
-            bind:value={email}
+            bind:value={username}
             class="input"
-            placeholder="name@company.com"
+            placeholder="rick123"
           />
         </div>
 

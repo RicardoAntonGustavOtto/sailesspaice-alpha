@@ -11,7 +11,7 @@ export const load = async ({ parent }) => {
   } = await supabase.auth.getSession();
 
   if (!session) {
-    throw redirect(303, "/login?redirect=/target-company");
+    throw redirect(303, "/login");
   }
 
   return {

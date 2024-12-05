@@ -13,6 +13,9 @@
   import { ownCompany } from "$lib/stores/ownCompany";
   import { getPrompt } from "$lib/services/promptManager";
 
+  // Add selectedResearchIndex at the top with other variables
+  let selectedResearchIndex = null;
+
   export let data;
   $: ownCompanyName = $ownCompany.name;
   let company = data?.company || null;
@@ -100,14 +103,25 @@
 
       // Parse citations from the research content
       const researchContent = research.choices[0].message.content;
-      const citations = research.citations || []; // Get citations directly from the research response
 
-      // Save to database with citations
+      // Create new research object
+      const newResearch = {
+        research_date: new Date().toISOString(),
+        research_content: researchContent,
+        citations: research.citations || [],
+      };
+
+      // Get current research array or initialize empty array
+      const currentResearch = company.research_result || [];
+
+      // Create the new research array
+      const updatedResearch = [...currentResearch, newResearch];
+
+      // Update database with new research array
       const { data: updatedCompany, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
-          research_result: researchContent,
-          research_citations: citations,
+          research_result: updatedResearch,
         })
         .eq("id", company.id)
         .select()
@@ -124,7 +138,9 @@
       // Update the research result state
       researchResult = researchContent;
       editedResearch = researchContent;
-      // Citations are already updated in company object through updatedCompany
+
+      // Close modal after successful save
+      closeResearchModal();
     } catch (err) {
       error = "Failed to generate AI research. Please try again.";
       console.error("AI Research failed:", err);
@@ -134,17 +150,28 @@
   }
 
   async function saveResearch() {
-    if (!company || !editedResearch) return;
+    if (!company || !editedResearch || selectedResearchIndex === null) return;
 
     try {
       loading = true;
       error = null;
 
-      // Update research directly in targetcompanies
+      // Get current research array or initialize empty array
+      const currentResearch = company.research_result || [];
+
+      // Create updated research array
+      const updatedResearch = [...currentResearch];
+      updatedResearch[selectedResearchIndex] = {
+        ...updatedResearch[selectedResearchIndex],
+        research_content: editedResearch,
+        research_date: new Date().toISOString(),
+      };
+
+      // Update research in database
       const { data: updatedCompany, error: updateError } = await supabase
         .from("targetcompanies")
         .update({
-          research_result: editedResearch,
+          research_result: updatedResearch,
         })
         .eq("id", company.id)
         .select()
@@ -157,9 +184,6 @@
 
       // Update sessionStorage
       sessionStorage.setItem("selectedCompany", JSON.stringify(company));
-
-      // Update the research result state
-      researchResult = editedResearch;
 
       // Close modal
       closeResearchModal();
@@ -715,31 +739,123 @@
     <div class="bg-white rounded-lg shadow-md p-6">
       {#if activeTab === "research"}
         <div class="space-y-4">
-          {#if company.research_result}
-            <div class="border rounded-lg p-6 bg-white">
-              <div class="markdown-content">
-                {@html renderMarkdown(company.research_result)}
-              </div>
-              {#if company?.research_citations?.length > 0}
-                <div class="mt-6 border-t pt-4">
-                  <h3 class="text-lg font-semibold mb-2">Sources:</h3>
-                  <ul class="pl-5 list-none space-y-2">
-                    {#each company.research_citations as citation}
-                      <li>
-                        <a
-                          href={citation}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          {citation}
-                        </a>
-                      </li>
-                    {/each}
-                  </ul>
+          {#if company.research_result && company.research_result.length > 0}
+            {#each company.research_result as research, index}
+              <div class="border rounded-lg p-4 bg-white">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <!-- Document Icon -->
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-6 w-6 text-gray-500"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2H7a2 2 0 01-2-2z"
+                      />
+                    </svg>
+
+                    <!-- Date -->
+                    <span class="text-sm text-gray-600">
+                      {new Date(research.research_date).toLocaleDateString()}
+                    </span>
+                  </div>
+
+                  <div class="flex items-center gap-2">
+                    <!-- Eye Icon -->
+                    <button
+                      on:click={() => {
+                        showResearchModal = true;
+                        editedResearch = research.research_content;
+                        selectedResearchIndex = index;
+                      }}
+                      class="p-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
+                      title="View Research"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                        <path
+                          fill-rule="evenodd"
+                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+
+                    <!-- Trash Icon -->
+                    <button
+                      on:click={async () => {
+                        if (
+                          confirm(
+                            "Are you sure you want to delete this research?"
+                          )
+                        ) {
+                          try {
+                            // Get current research array or initialize empty array
+                            const currentResearch =
+                              company.research_result || [];
+
+                            // Create updated research array
+                            const updatedResearch = [...currentResearch];
+                            updatedResearch.splice(index, 1);
+
+                            // Update research in database
+                            const { data: updatedCompany, error: updateError } =
+                              await supabase
+                                .from("targetcompanies")
+                                .update({
+                                  research_result: updatedResearch,
+                                })
+                                .eq("id", company.id)
+                                .select()
+                                .single();
+
+                            if (updateError) throw updateError;
+
+                            // Update local state
+                            company = updatedCompany;
+
+                            // Update sessionStorage
+                            sessionStorage.setItem(
+                              "selectedCompany",
+                              JSON.stringify(company)
+                            );
+                          } catch (err) {
+                            console.error("Error deleting research:", err);
+                            error = err.message;
+                          }
+                        }
+                      }}
+                      class="p-2 text-red-600 hover:text-red-800 transition-all duration-200"
+                      title="Delete Research"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="h-5 w-5"
+                        viewBox="0 0 20 20"
+                        fill="currentColor"
+                      >
+                        <path
+                          fill-rule="evenodd"
+                          d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                          clip-rule="evenodd"
+                        />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
-              {/if}
-            </div>
+              </div>
+            {/each}
           {:else}
             <p class="text-gray-500">No research available.</p>
           {/if}
@@ -753,20 +869,33 @@
       {:else if activeTab === "annual-reports"}
         <div class="space-y-4">
           {#if company.annual_report}
-            <div class="border rounded-lg p-6 bg-white">
-              <!-- File info header -->
-              <div class="flex justify-between items-start">
-                <div>
-                  <h3 class="font-medium text-gray-900">
+            <div class="border rounded-lg p-4 bg-white">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                  <!-- File Icon -->
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-6 w-6 text-gray-500"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
+                    />
+                  </svg>
+
+                  <!-- File Name -->
+                  <span class="text-sm text-gray-900">
                     {company.annual_report.fileName}
-                  </h3>
-                  <p class="text-sm text-gray-500">
-                    Type: {company.annual_report.type === "pdf"
-                      ? "PDF Document"
-                      : "Text File"}
-                  </p>
+                  </span>
                 </div>
-                <div class="flex gap-2">
+
+                <div class="flex items-center gap-2">
+                  <!-- View Icon -->
                   {#if company.annual_report.type === "pdf"}
                     <a
                       href={supabase.storage
@@ -794,6 +923,8 @@
                       </svg>
                     </a>
                   {/if}
+
+                  <!-- Delete Icon -->
                   <button
                     on:click={deleteAnnualReport}
                     class="p-2 text-red-600 hover:text-red-800 transition-all duration-200"
@@ -814,21 +945,13 @@
                   </button>
                 </div>
               </div>
-
-              <!-- Only show content for text files -->
-              {#if company.annual_report.type === "text"}
-                <div class="mt-4">
-                  <pre class="whitespace-pre-wrap">{company.annual_report
-                      .content}</pre>
-                </div>
-              {/if}
             </div>
           {:else}
             <p class="text-gray-500">No annual report available.</p>
           {/if}
 
           <!-- Upload button section -->
-          <div class="mt-6">
+          <div class="mt-4">
             <input
               type="file"
               accept=".txt,.pdf"
@@ -1013,27 +1136,28 @@
                 placeholder="AI research results will appear here..."
               ></textarea>
 
-              <div class="space-y-4 flex-shrink-0 mt-auto">
-                {#if company?.research_citations?.length > 0}
-                  <div class="border-t pt-4">
-                    <h3 class="text-lg font-semibold mb-2">Sources:</h3>
-                    <ul class="pl-5 list-none space-y-2">
-                      {#each company.research_citations as citation}
-                        <li>
-                          <a
-                            href={citation}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
-                          >
-                            {citation}
-                          </a>
-                        </li>
-                      {/each}
-                    </ul>
-                  </div>
-                {/if}
+              <!-- Add Citations Section -->
+              {#if company?.research_result?.[selectedResearchIndex]?.citations?.length > 0}
+                <div class="border-t pt-4 mb-4">
+                  <h3 class="text-lg font-semibold mb-2">Sources:</h3>
+                  <ul class="pl-5 list-none space-y-2">
+                    {#each company.research_result[selectedResearchIndex].citations as citation}
+                      <li>
+                        <a
+                          href={citation}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          class="text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {citation}
+                        </a>
+                      </li>
+                    {/each}
+                  </ul>
+                </div>
+              {/if}
 
+              <div class="space-y-4 flex-shrink-0 mt-auto">
                 <div class="flex justify-end gap-3">
                   <button
                     type="button"
@@ -1076,7 +1200,7 @@
             class="text-gray-500 hover:text-gray-700"
             on:click={() => (showPreviewModal = false)}
           >
-            âœ•
+            ×
           </button>
         </div>
         <div class="mt-4">
@@ -1112,7 +1236,7 @@
             class="text-gray-500 hover:text-gray-700"
             on:click={closeProspectModal}
           >
-            âœ•
+            ×
           </button>
         </div>
 
@@ -1212,7 +1336,7 @@
             class="text-gray-500 hover:text-gray-700"
             on:click={closeEditModal}
           >
-            âœ•
+            ×
           </button>
         </div>
 
@@ -1279,7 +1403,7 @@
             class="text-gray-500 hover:text-gray-700"
             on:click={closeEditProspectModal}
           >
-            âœ•
+            ×
           </button>
         </div>
 
@@ -1394,46 +1518,52 @@
             <h3 class="font-semibold mb-3">AI Research</h3>
             {#if company.research_result}
               <div class="space-y-2">
-                <label
-                  class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedResearch ===
-                  company.research_result
-                    ? 'bg-gray-50 border-gray-200'
-                    : ''}"
-                >
-                  <div
-                    class="relative flex items-center justify-center w-5 h-5 mt-0.5"
+                {#each company.research_result as research}
+                  <label
+                    class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedResearch ===
+                    research
+                      ? 'bg-gray-50 border-gray-200'
+                      : ''}"
                   >
-                    <input
-                      type="radio"
-                      name="research"
-                      class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
-                      bind:group={selectedResearch}
-                      value={company.research_result}
-                    />
                     <div
-                      class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
-                    ></div>
-                    <svg
-                      class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
+                      class="relative flex items-center justify-center w-5 h-5 mt-0.5"
                     >
-                      <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        stroke-width="2"
-                        d="M5 13l4 4L19 7"
-                      ></path>
-                    </svg>
-                  </div>
-                  <div class="flex-grow">
-                    <div class="font-medium">Company Research</div>
-                    <div class="text-sm text-gray-500 mt-2 line-clamp-2">
-                      {company.research_result.substring(0, 150)}...
+                      <input
+                        type="radio"
+                        name="research"
+                        class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
+                        bind:group={selectedResearch}
+                        value={research}
+                      />
+                      <div
+                        class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
+                      ></div>
+                      <svg
+                        class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
                     </div>
-                  </div>
-                </label>
+                    <div class="flex-grow">
+                      <div class="font-medium">
+                        Research from {new Date(
+                          research.research_date
+                        ).toLocaleDateString()}
+                      </div>
+                      <div class="text-sm text-gray-500 mt-2 line-clamp-2">
+                        {research.research_content.substring(0, 150)}...
+                      </div>
+                    </div>
+                  </label>
+                {/each}
               </div>
             {:else}
               <div class="text-gray-500 mb-3">No AI research available.</div>
@@ -1560,7 +1690,7 @@
                       <div class="font-medium">{prospect.name}</div>
                       <div class="text-sm text-gray-500">{prospect.title}</div>
                       <div class="text-sm text-gray-500 mt-1">
-                        {prospect.email} â€¢ {prospect.phone}
+                        {prospect.email} • {prospect.phone}
                       </div>
                     </div>
                   </label>

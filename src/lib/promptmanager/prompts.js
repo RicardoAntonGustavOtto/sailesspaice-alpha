@@ -16,7 +16,7 @@ export const prompts = {
     },
     analyze_annualreport: {
       id: "analyze_annualreport",
-      model: "gpt-3.5-turbo",
+      model: "gpt-4o-mini",
       provider: "openai",
       content: `You are an expert in the analysis of corporate annual reports with a focus on strategic business alignment. I have provided you with the latest annual report of {{targetcompany_name}}. Here is the annual report: {{targetcompany_annualreport}}
 
@@ -36,7 +36,7 @@ export const prompts = {
     },
     cold_calling: {
       id: "generate_targetcompany_coldcallingguide",
-      model: "gpt-4",
+      model: "gpt-4o-mini",
       provider: "openai",
       content: `Based on this company information, generate a cold calling script prospect name: {{prospectName}}.
 

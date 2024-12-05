@@ -12,6 +12,15 @@
   import { goto } from "$app/navigation";
   import { ownCompany } from "$lib/stores/ownCompany";
   import { getPrompt } from "$lib/services/promptManager";
+  import * as pdfjs from "pdfjs-dist";
+
+  // Set up the worker using dynamic import
+  if (typeof window !== "undefined") {
+    pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+      "pdfjs-dist/build/pdf.worker.mjs",
+      import.meta.url
+    ).toString();
+  }
 
   // Add selectedResearchIndex at the top with other variables
   let selectedResearchIndex = null;
@@ -201,6 +210,26 @@
     editedResearch = "";
   }
 
+  async function extractTextFromPDF(url) {
+    try {
+      const pdf = await pdfjs.getDocument(url).promise;
+      let fullText = "";
+
+      // Extract text from each page
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item) => item.str).join(" ");
+        fullText += pageText + "\n\n";
+      }
+
+      return fullText;
+    } catch (err) {
+      console.error("Error extracting PDF text:", err);
+      throw err;
+    }
+  }
+
   async function handleFileUpload(event) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -212,32 +241,38 @@
     try {
       let content;
       if (file.type === "application/pdf") {
-        // For PDF files, we'll store the file itself
+        // For PDF files, we'll store both the file and extracted text
         const formData = new FormData();
         formData.append("file", file);
 
-        // Changed bucket name to match the one we use for retrieval
+        // Upload the PDF file
         const { data: uploadResult, error: uploadError } =
           await supabase.storage
-            .from("salesspaice-files") // Make sure this matches exactly
+            .from("salesspaice-files")
             .upload(`${company.id}/${file.name}`, file, {
               cacheControl: "3600",
-              upsert: true, // This will overwrite if file exists
+              upsert: true,
             });
 
         if (uploadError) throw uploadError;
 
-        // Get the public URL using the same bucket name
+        // Get the public URL
         const {
           data: { publicUrl },
         } = supabase.storage
           .from("salesspaice-files")
           .getPublicUrl(`${company.id}/${file.name}`);
 
+        // Extract text from the PDF
+        const extractedText = await extractTextFromPDF(
+          URL.createObjectURL(file)
+        );
+
         content = {
           type: "pdf",
           url: publicUrl,
           fileName: file.name,
+          content: extractedText, // Store the extracted text
         };
       } else {
         // For text files, read the content directly
@@ -648,15 +683,13 @@
         throw new Error("Company name not loaded yet. Please try again.");
       }
 
-      // Get the annual report content based on type
-      const annualReportContent =
-        company.annual_report.type === "pdf"
-          ? `PDF URL: ${company.annual_report.url}`
-          : company.annual_report.content;
+      // Get the annual report content
+      const annualReportContent = company.annual_report.content;
 
       // Get the right prompt with properly formatted variables
       const { prompt, model, provider } = getPrompt("analyze_annualreport", {
-        owncompany_info: $ownCompany.name,
+        owncompany_name: $ownCompany.name, // Changed from owncompany_info
+        targetcompany_name: company.name,
         targetcompany_annualreport: annualReportContent || "",
       });
       console.log("prompt used for AI:", prompt);

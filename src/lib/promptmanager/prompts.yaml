@@ -1,4 +1,13 @@
 # @format
+# Usable variables
+# {{owncompany_name}}: Master Data OwnCompany Name
+# {{owncompany_info}}: Master Data OwnCompany Information
+
+# {{targetcompany_name}}: TargetCompany Name
+# {{targetcompany_website}}: TargetCompany Website
+# {{targetcompany_annualreport}}: The Selected TargetCompany Annual Report, if there's only 1 it will take the first one
+# {{prospect_info}}: Prospect Information
+# {{prospectName}}: Prospect Name
 
 prompts:
   targetcompany_research:

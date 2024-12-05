@@ -626,6 +626,114 @@
       loading = false;
     }
   }
+
+  // Add to the variables at the top of the script
+  let showAnnualReportResearchModal = false;
+  let annualReportResearchLoading = false;
+  let annualReportResearchResult = "";
+
+  // Add these functions before the closing script tag
+  async function handleAnnualReportResearch() {
+    if (!company?.annual_report) {
+      error = "No annual report available to analyze";
+      return;
+    }
+
+    showAnnualReportResearchModal = true;
+    annualReportResearchLoading = true;
+    error = null;
+
+    try {
+      if (!$ownCompany.name) {
+        throw new Error("Company name not loaded yet. Please try again.");
+      }
+
+      // Get the right prompt
+      const { prompt, model, provider } = getPrompt("analyze_annualreport", {
+        owncompany_name: $ownCompany.name,
+        targetcompany_name: company.name,
+        annual_report_content:
+          company.annual_report.content ||
+          "PDF file, analyze URL: " + company.annual_report.url,
+      });
+
+      // Call the API and get the response
+      const response = await callProxy(prompt, provider, model);
+
+      // Extract the content from the response
+      // The response format depends on the model being used
+      const researchContent =
+        response.content || response.choices?.[0]?.message?.content || response;
+
+      if (!researchContent) {
+        throw new Error("Failed to get analysis content from API response");
+      }
+
+      // Update database with research result
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          annual_report_research: researchContent,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      company = updatedCompany;
+      annualReportResearchResult = researchContent;
+
+      // Update sessionStorage
+      sessionStorage.setItem("selectedCompany", JSON.stringify(company));
+    } catch (err) {
+      error = "Failed to analyze annual report. Please try again.";
+      console.error("Annual Report Analysis failed:", err);
+    } finally {
+      annualReportResearchLoading = false;
+    }
+  }
+
+  function closeAnnualReportResearchModal() {
+    showAnnualReportResearchModal = false;
+    annualReportResearchResult = "";
+  }
+
+  // Add to the variables at the top
+  let showFullAnalysisModal = false;
+
+  // Add this function
+  function openFullAnalysis() {
+    showFullAnalysisModal = true;
+  }
+
+  // Add this function near the other delete functions
+  async function deleteAnnualReportAnalysis() {
+    if (!confirm("Are you sure you want to delete this analysis?")) return;
+
+    try {
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          annual_report_research: null,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      company = updatedCompany;
+
+      // Update sessionStorage
+      sessionStorage.setItem("selectedCompany", JSON.stringify(company));
+    } catch (err) {
+      console.error("Error deleting analysis:", err);
+      error = err.message;
+    }
+  }
 </script>
 
 <div class="max-w-7xl mx-auto p-6">
@@ -869,82 +977,81 @@
       {:else if activeTab === "annual-reports"}
         <div class="space-y-4">
           {#if company.annual_report}
-            <div class="border rounded-lg p-4 bg-white">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-3">
-                  <!-- File Icon -->
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="h-6 w-6 text-gray-500"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      stroke-width="2"
-                      d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                    />
-                  </svg>
-
-                  <!-- File Name -->
-                  <span class="text-sm text-gray-900">
+            <div class="border rounded p-4">
+              <div class="flex justify-between items-start mb-2">
+                <div>
+                  <h4 class="font-semibold">
                     {company.annual_report.fileName}
-                  </span>
+                  </h4>
                 </div>
-
-                <div class="flex items-center gap-2">
-                  <!-- View Icon -->
-                  {#if company.annual_report.type === "pdf"}
-                    <a
-                      href={supabase.storage
-                        .from("salesspaice-files")
-                        .getPublicUrl(
-                          `${company.id}/${company.annual_report.fileName}`
-                        ).data.publicUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="p-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
-                      title="View Document"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        class="h-5 w-5"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path
-                          fill-rule="evenodd"
-                          d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
-                          clip-rule="evenodd"
-                        />
-                      </svg>
-                    </a>
-                  {/if}
-
-                  <!-- Delete Icon -->
+                <div class="flex gap-2">
+                  <!-- Add Research Button -->
                   <button
-                    on:click={deleteAnnualReport}
-                    class="p-2 text-red-600 hover:text-red-800 transition-all duration-200"
-                    title="Delete Annual Report"
+                    on:click={handleAnnualReportResearch}
+                    class="px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200 flex items-center gap-2"
+                    disabled={annualReportResearchLoading}
                   >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      class="h-5 w-5"
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                    >
-                      <path
-                        fill-rule="evenodd"
-                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
-                        clip-rule="evenodd"
-                      />
-                    </svg>
+                    {#if annualReportResearchLoading}
+                      <div
+                        class="animate-spin rounded-full h-4 w-4 border-2 border-gray-200 border-b-black"
+                      ></div>
+                    {/if}
+                    Analyze Report
                   </button>
+                  <!-- Existing buttons -->
                 </div>
               </div>
+
+              <!-- Display existing research if available -->
+              {#if company.annual_report_research}
+                <div class="mt-4 p-4 bg-gray-50 rounded-lg">
+                  <div class="flex justify-between items-start">
+                    <h5 class="font-medium mb-2">Analysis Results:</h5>
+                    <div class="flex gap-2">
+                      <button
+                        on:click={openFullAnalysis}
+                        class="p-2 text-gray-600 hover:text-gray-900 transition-all duration-200"
+                        title="View Full Analysis"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+                          <path
+                            fill-rule="evenodd"
+                            d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z"
+                            clip-rule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                      <button
+                        on:click={deleteAnnualReportAnalysis}
+                        class="p-2 text-red-600 hover:text-red-800 transition-all duration-200"
+                        title="Delete Analysis"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          class="h-5 w-5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fill-rule="evenodd"
+                            d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                            clip-rule="evenodd"
+                          />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                  <div class="markdown-content line-clamp-3">
+                    {@html renderMarkdown(company.annual_report_research)}
+                  </div>
+                </div>
+              {/if}
             </div>
           {:else}
             <p class="text-gray-500">No annual report available.</p>
@@ -1757,6 +1864,85 @@
             </ul>
           </div>
         {/if}
+      </div>
+    </div>
+  {/if}
+
+  {#if showAnnualReportResearchModal}
+    <div
+      class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center"
+      transition:fade={{ duration: 200 }}
+      on:click|self={closeAnnualReportResearchModal}
+    >
+      <div
+        class="bg-white p-6 rounded-lg w-full max-w-4xl mx-4 shadow-xl h-[90vh] flex flex-col overflow-hidden"
+        on:click|stopPropagation
+      >
+        <div class="flex justify-between items-start mb-4">
+          <h2 class="text-xl font-semibold">Annual Report Analysis</h2>
+          <button
+            class="text-gray-500 hover:text-gray-700"
+            on:click={closeAnnualReportResearchModal}
+          >
+            ×
+          </button>
+        </div>
+
+        {#if annualReportResearchLoading}
+          <div class="flex flex-col items-center justify-center py-12">
+            <div
+              class="animate-spin rounded-full h-12 w-12 border-2 border-gray-200 border-b-black mb-4"
+            ></div>
+            <p class="text-gray-600">Analyzing Annual Report...</p>
+          </div>
+        {:else if error}
+          <div class="text-red-600 p-4 text-center">
+            {error}
+          </div>
+        {:else}
+          <div class="flex-grow overflow-auto">
+            <div class="markdown-content">
+              {@html renderMarkdown(annualReportResearchResult)}
+            </div>
+          </div>
+          <div class="flex justify-end gap-3 mt-4">
+            <button
+              class="px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              on:click={closeAnnualReportResearchModal}
+            >
+              Close
+            </button>
+          </div>
+        {/if}
+      </div>
+    </div>
+  {/if}
+
+  {#if showFullAnalysisModal}
+    <div
+      class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center"
+      transition:fade={{ duration: 200 }}
+      on:click|self={() => (showFullAnalysisModal = false)}
+    >
+      <div
+        class="bg-white p-6 rounded-lg w-full max-w-4xl mx-4 shadow-xl h-[90vh] flex flex-col overflow-hidden"
+        on:click|stopPropagation
+      >
+        <div class="flex justify-between items-start mb-4">
+          <h2 class="text-xl font-semibold">Analysis Results</h2>
+          <button
+            class="text-gray-500 hover:text-gray-700"
+            on:click={() => (showFullAnalysisModal = false)}
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="flex-grow overflow-auto">
+          <div class="markdown-content">
+            {@html renderMarkdown(company.annual_report_research)}
+          </div>
+        </div>
       </div>
     </div>
   {/if}

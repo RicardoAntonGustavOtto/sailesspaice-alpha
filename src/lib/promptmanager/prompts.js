@@ -14,6 +14,26 @@ export const prompts = {
 
       Important: You may only reference {{targetcompany_name}}'s official website.`,
     },
+    analyze_annualreport: {
+      id: "analyze_annualreport",
+      model: "gpt-4o",
+      provider: "openai",
+      content: `You are an expert in the analysis of corporate annual reports with a focus on strategic business alignment. I have provided you with the latest annual report of {{targetcompany_name}}. Here is the annual report: {{targetcompany_annualreport}}
+
+      Please create a thorough analysis that:
+
+      (1) Identifies key themes, priorities, and strategic goals highlighted in the report, with an emphasis on areas of growth, challenges, and future direction.
+
+      (2) Examines areas of overlap between {{targetcompany_name}}'s business needs and the solutions offered by {{owncompany_name}}, including specific opportunities where {{owncompany_name}} can add value.
+
+      (3) Highlights financial metrics, operational developments, and strategic initiatives from the report that are most relevant to {{owncompany_name}}'s offerings.
+
+      (4) Offers actionable insights on how {{owncompany_name}} can effectively position its solutions to address {{targetcompany_name}}'s identified needs or challenges.
+
+      Here is a description of {{owncompany_name}}'s products, solutions, and services: {{owncompany_info}}
+
+      Ensure your analysis is clear, well-structured, and provides concrete connections between the findings in the annual report and the potential solutions {{owncompany_name}} offers.`,
+    },
     cold_calling: {
       id: "generate_targetcompany_coldcallingguide",
       model: "gpt-4",

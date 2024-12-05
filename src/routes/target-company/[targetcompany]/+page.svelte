@@ -648,22 +648,24 @@
         throw new Error("Company name not loaded yet. Please try again.");
       }
 
-      // Get the right prompt
-      const { prompt, model, provider } = getPrompt("analyze_annualreport", {
-        owncompany_name: $ownCompany.name,
-        targetcompany_name: company.name,
-        annual_report_content:
-          company.annual_report.content ||
-          "PDF file, analyze URL: " + company.annual_report.url,
-      });
+      // Get the annual report content based on type
+      const annualReportContent =
+        company.annual_report.type === "pdf"
+          ? `PDF URL: ${company.annual_report.url}`
+          : company.annual_report.content;
 
+      // Get the right prompt with properly formatted variables
+      const { prompt, model, provider } = getPrompt("analyze_annualreport", {
+        owncompany_info: $ownCompany.name,
+        targetcompany_annualreport: annualReportContent || "",
+      });
+      console.log("prompt used for AI:", prompt);
       // Call the API and get the response
       const response = await callProxy(prompt, provider, model);
 
       // Extract the content from the response
-      // The response format depends on the model being used
       const researchContent =
-        response.content || response.choices?.[0]?.message?.content || response;
+        response.choices?.[0]?.message?.content || response;
 
       if (!researchContent) {
         throw new Error("Failed to get analysis content from API response");

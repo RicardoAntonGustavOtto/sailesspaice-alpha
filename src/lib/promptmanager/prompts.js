@@ -38,16 +38,16 @@ export const prompts = {
       id: "generate_targetcompany_coldcallingguide",
       model: "gpt-4",
       provider: "openai",
-      content: `Based on this company information, generate a cold calling script{{prospectName}}.
+      content: `Based on this company information, generate a cold calling script prospect name: {{prospectName}}.
 
-      {{targetcompany_research}}
-      {{targetcompany_annualreport}}
-      {{prospect_info}}
+      for company: {{targetcompany_research}}
+      for annual report: {{targetcompany_annualreport}}
+      for prospect: {{prospect_info}}
 
       I am calling from {{owncompany_name}}.
 
       Please generate a detailed cold calling guide including:
-      1. Introduction{{prospect_name}}
+      1. Introduction {{prospect_name}}
       2. Value proposition
       3. Key talking points
       4. Handling objections

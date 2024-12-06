@@ -825,7 +825,7 @@
 
       // Get the prompt
       const { prompt, model, provider } = getPrompt(
-        "generate_targetcompany_emaildraft",
+        "prospecting_email",
         promptVariables
       );
 

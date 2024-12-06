@@ -62,7 +62,7 @@
     { id: "annual-reports", label: "Annual Reports" },
     { id: "prospects", label: "Prospects" },
     { id: "cold-calling", label: "Cold Calling Guides" },
-    { id: "email-drafts", label: "Email Drafts" }, // Add this new tab
+    { id: "email-drafts", label: "Prospecting Email" }, // Add this new tab
   ];
 
   let activeTab = "research";
@@ -1401,7 +1401,7 @@
               </div>
             {/each}
           {:else}
-            <p class="text-gray-500">No email drafts available.</p>
+            <p class="text-gray-500">No Prospecting Email available.</p>
           {/if}
           <button
             on:click={openEmailDraftModal}

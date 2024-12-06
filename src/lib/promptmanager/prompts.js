@@ -53,24 +53,23 @@ export const prompts = {
       4. Handling objections
       5. Next steps`,
     },
-    generate_targetcompany_emaildraft: {
-      id: "generate_targetcompany_emaildraft",
-      model: "gpt-4o-mini",
+    prospecting_email: {
+      id: "prospecting_email",
+      model: "gpt-4o",
       provider: "openai",
-      content: `Based on this company information, generate an email draft for prospect name: {{prospectName}}.
+      content: `You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospectName}} from the company {{targetcompany_name}}.
 
-      for company: {{targetcompany_research}}
-      for annual report: {{targetcompany_annualreport}}
-      for prospect: {{prospect_info}}
+      In order to understand the two companies, study info about the sales executive's company, {{owncompany_name}}, here: {{owncompany_info}}
 
-      I am calling from {{owncompany_name}}.
+      And now that you have read that, please read this information about {{targetcompany_name}} here: {{targetcompany_research_result}}
 
-      Please generate a detailed cold calling guide including:
-      1. Introduction {{prospect_name}}
-      2. Value proposition
-      3. Key talking points
-      4. Handling objections
-      5. Next steps`,
+      Finally, read this info about the prospect, {{prospectName}}, here: {{prospect_info}}
+
+      Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospectName}} if it seems relevant and professional.
+
+      (2) Overview: An easy-to-read overview of {{owncompany_name}}’s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
+
+      (3) Objections: A list of potential objections the prospect might raise, along with suggested responses. Present this information in a table with gridlines.`,
     },
   },
 };

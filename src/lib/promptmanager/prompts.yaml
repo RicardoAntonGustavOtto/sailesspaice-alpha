@@ -8,6 +8,8 @@
 # {{targetcompany_annualreport}}: The Selected TargetCompany Annual Report, if there's only 1 it will take the first one
 # {{prospect_info}}: Prospect Information
 # {{prospectName}}: Prospect Name
+# {{targetcompany_annual_report_research}}: Annual Report Research
+# {{targetcompany_research_result}}
 
 prompts:
   targetcompany_research:
@@ -25,20 +27,53 @@ prompts:
 
   cold_calling:
     id: "cold_calling_guide"
-    model: "gpt-4"
+    model: "gpt-4o"
     provider: "openai"
     content: |
-      Based on this company information, generate a cold calling script{{prospectName}}.
+      You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospectName}} from the company {{targetcompany_name}}.
 
-      {{research}}
-      {{annualReport}}
-      {{prospectInfo}}
+      In order to understand the two companies, study info about the sales executive's company, {{owncompany_name}}, here: {{owncompany_info}}
 
-      I am calling from {{ownCompanyName}}.
 
-      Please generate a detailed cold calling guide including:
-      1. Introduction{{prospectPlaceholder}}
-      2. Value proposition
-      3. Key talking points
-      4. Handling objections
-      5. Next steps
+
+      And now that you have read that, please read this information about {{targetcompany_name}} here: {{targetcompany_research_result}}
+
+      Finally, read this info about the prospect, {{prospectName}}, here: {{prospect_info}}
+
+      Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospectName}} if it seems relevant and professional.
+
+      (2) Overview: An easy-to-read overview of {{owncompany_name}}’s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
+
+      (3) Objections: A list of potential objections the prospect might raise, along with suggested responses. Present this information in a table with gridlines.
+
+targetcompany_research:
+  id: "research_analysis"
+  model: "llama-3.1-sonar-large-128k-online"
+  provider: "perplexity"
+  content: |
+    You are an expert at researching companies and writing detailed descriptions of the products and services they provide and the benefits they provide their customers.
+
+    Please research the company {{companyName}} and write a comprehensive description of (1) their products and services and (2) the benefits they provide their customers. Your only source for information should be their own website. Here is the URL: {{companyWebsite}}
+
+    Your research results should include naming the location of the company's headquarters. You must use the company headquarters location as a quality check for your other research. Do not include sources that have no logical connection to that location. Be very cautious to avoid referencing sources or companies that may not be related to {{companyName}}.
+
+    Important: You may only reference {{companyName}}'s official website.
+
+prospecting_email:
+  id: "prospecting_email"
+  model: "gpt-4o"
+  provider: "openai"
+  content: |
+    You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospectName}} from the company {{targetcompany_name}}.
+
+    In order to understand the two companies, study info about the sales executive's company, {{owncompany_name}}, here: {{owncompany_info}}
+
+    And now that you have read that, please read this information about {{targetcompany_name}} here: {{targetcompany_research_result}}
+
+    Finally, read this info about the prospect, {{prospectName}}, here: {{prospect_info}}
+
+    Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospectName}} if it seems relevant and professional.
+
+    (2) Overview: An easy-to-read overview of {{owncompany_name}}’s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
+
+    (3) Objections: A list of potential objections the prospect might raise, along with suggested responses. Present this information in a table with gridlines.

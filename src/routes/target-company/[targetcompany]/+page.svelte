@@ -62,6 +62,7 @@
     { id: "annual-reports", label: "Annual Reports" },
     { id: "prospects", label: "Prospects" },
     { id: "cold-calling", label: "Cold Calling Guides" },
+    { id: "email-drafts", label: "Email Drafts" }, // Add this new tab
   ];
 
   let activeTab = "research";
@@ -776,6 +777,129 @@
       error = err.message;
     }
   }
+
+  // Add these new variables with the other modal/state variables
+  let showEmailDraftModal = false;
+  let selectedEmailResearch = null;
+  let selectedEmailReport = null;
+  let selectedEmailProspect = null;
+
+  // Add these new functions
+  function openEmailDraftModal() {
+    showEmailDraftModal = true;
+    selectedEmailResearch = null;
+    selectedEmailReport = null;
+    selectedEmailProspect = null;
+  }
+
+  function closeEmailDraftModal() {
+    showEmailDraftModal = false;
+  }
+
+  async function generateEmailDraft() {
+    try {
+      loading = true;
+      error = null;
+
+      if (!$ownCompany.name) {
+        throw new Error("Company name not loaded yet. Please try again.");
+      }
+
+      // Create the variables object
+      const promptVariables = {
+        prospectName: selectedEmailProspect?.name || "",
+        targetcompany_annualreport: selectedEmailReport || "",
+        targetcompany_research: selectedEmailResearch?.research_content || "",
+        prospect_info: selectedEmailProspect
+          ? `Name: ${selectedEmailProspect.name}
+             Title: ${selectedEmailProspect.title}
+             Email: ${selectedEmailProspect.email}
+             Phone: ${selectedEmailProspect.phone}
+             Notes: ${selectedEmailProspect.notes}`
+          : "",
+        owncompany_name: $ownCompany.name,
+      };
+
+      // Debug log
+      console.log("Prompt Variables:", promptVariables);
+
+      // Get the prompt
+      const { prompt, model, provider } = getPrompt(
+        "generate_targetcompany_emaildraft",
+        promptVariables
+      );
+
+      // Debug log
+      console.log("Generated Prompt:", prompt);
+
+      const response = await callProxy(prompt, provider, model);
+      const draftContent = response.choices?.[0]?.message?.content || response;
+
+      const draft = {
+        id: crypto.randomUUID(),
+        prospect: selectedEmailProspect || {
+          name: "[PROSPECT NAME]",
+          title: "Unknown",
+          email: "",
+          phone: "",
+          notes: "Generic draft",
+        },
+        content: draftContent,
+        generated_at: new Date().toISOString(),
+      };
+
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          cold_email_drafts: [...(company.cold_email_drafts || []), draft],
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      // Update local state
+      company = updatedCompany;
+
+      // Update sessionStorage
+      sessionStorage.setItem("selectedCompany", JSON.stringify(company));
+
+      closeEmailDraftModal();
+    } catch (err) {
+      console.error("Error generating email draft:", err);
+      error = err.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  // Add delete function for email drafts
+  async function deleteEmailDraft(draftId) {
+    if (!confirm("Are you sure you want to delete this email draft?")) return;
+
+    try {
+      const updatedDrafts = company.cold_email_drafts.filter(
+        (d) => d.id !== draftId
+      );
+
+      const { data: updatedCompany, error: updateError } = await supabase
+        .from("targetcompanies")
+        .update({
+          cold_email_drafts: updatedDrafts,
+        })
+        .eq("id", company.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+
+      company = updatedCompany;
+    } catch (err) {
+      console.error("Error deleting email draft:", err);
+      error = err.message;
+    }
+  }
 </script>
 
 <div class="max-w-7xl mx-auto p-6">
@@ -1236,6 +1360,54 @@
             class="mt-4 px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
           >
             Generate Cold Calling Guide
+          </button>
+        </div>
+      {:else if activeTab === "email-drafts"}
+        <div class="space-y-4">
+          {#if company.cold_email_drafts && company.cold_email_drafts.length > 0}
+            {#each company.cold_email_drafts as draft}
+              <div class="border rounded p-4">
+                <div class="flex justify-between items-start mb-2">
+                  <div>
+                    <h4 class="font-semibold">{draft.prospect.name}</h4>
+                    <p class="text-sm text-gray-500">
+                      Generated: {new Date(
+                        draft.generated_at
+                      ).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    on:click={() => deleteEmailDraft(draft.id)}
+                    class="p-1 text-red-600 hover:text-red-800 transition-all duration-200"
+                    title="Delete Draft"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      class="h-4 w-4"
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                    >
+                      <path
+                        fill-rule="evenodd"
+                        d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z"
+                        clip-rule="evenodd"
+                      />
+                    </svg>
+                  </button>
+                </div>
+                <div class="markdown-content mt-4">
+                  {@html renderMarkdown(draft.content)}
+                </div>
+              </div>
+            {/each}
+          {:else}
+            <p class="text-gray-500">No email drafts available.</p>
+          {/if}
+          <button
+            on:click={openEmailDraftModal}
+            class="mt-4 px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+          >
+            Generate Email Draft
           </button>
         </div>
       {/if}
@@ -1980,6 +2152,239 @@
         <div class="flex-grow overflow-auto">
           <div class="markdown-content">
             {@html renderMarkdown(company.annual_report_research)}
+          </div>
+        </div>
+      </div>
+    </div>
+  {/if}
+
+  {#if showEmailDraftModal}
+    <div
+      class="fixed inset-0 bg-black/70 backdrop-blur-md z-20 flex items-center justify-center"
+      transition:fade={{ duration: 200 }}
+      on:click|self={closeEmailDraftModal}
+    >
+      <div
+        class="bg-white p-6 rounded-lg w-full max-w-2xl mx-4 shadow-xl"
+        on:click|stopPropagation
+      >
+        <div class="flex justify-between items-start mb-4">
+          <h2 class="text-xl font-semibold">Generate Email Draft</h2>
+          <button
+            class="text-gray-500 hover:text-gray-700"
+            on:click={closeEmailDraftModal}
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="space-y-6">
+          <!-- AI Research Section -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold mb-3">AI Research</h3>
+            {#if company.research_result}
+              <div class="space-y-2">
+                {#each company.research_result as research}
+                  <label
+                    class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedEmailResearch ===
+                    research
+                      ? 'bg-gray-50 border-gray-200'
+                      : ''}"
+                  >
+                    <div
+                      class="relative flex items-center justify-center w-5 h-5 mt-0.5"
+                    >
+                      <input
+                        type="radio"
+                        name="emailResearch"
+                        class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
+                        bind:group={selectedEmailResearch}
+                        value={research}
+                      />
+                      <div
+                        class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
+                      ></div>
+                      <svg
+                        class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
+                    </div>
+                    <div class="flex-grow">
+                      <div class="font-medium">
+                        Research from {new Date(
+                          research.research_date
+                        ).toLocaleDateString()}
+                      </div>
+                      <div class="text-sm text-gray-500 mt-2 line-clamp-2">
+                        {research.research_content.substring(0, 150)}...
+                      </div>
+                    </div>
+                  </label>
+                {/each}
+              </div>
+            {:else}
+              <div class="text-gray-500 mb-3">No AI research available.</div>
+              <button
+                on:click={() => {
+                  closeEmailDraftModal();
+                  handleAIResearch();
+                }}
+                class="px-3 py-1 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              >
+                Generate AI Research First
+              </button>
+            {/if}
+          </div>
+
+          <!-- Annual Reports Section -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold mb-3">Annual Report Analysis</h3>
+            {#if company.annual_report_research}
+              <div class="space-y-2">
+                <label
+                  class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedEmailReport ===
+                  company.annual_report_research
+                    ? 'bg-gray-50 border-gray-200'
+                    : ''}"
+                >
+                  <div
+                    class="relative flex items-center justify-center w-5 h-5 mt-0.5"
+                  >
+                    <input
+                      type="radio"
+                      name="emailReport"
+                      class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
+                      bind:group={selectedEmailReport}
+                      value={company.annual_report_research}
+                    />
+                    <div
+                      class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
+                    ></div>
+                    <svg
+                      class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M5 13l4 4L19 7"
+                      ></path>
+                    </svg>
+                  </div>
+                  <div class="flex-grow">
+                    <div class="font-medium">Annual Report Analysis</div>
+                    <div class="text-sm text-gray-500 mt-2 line-clamp-2">
+                      {company.annual_report_research.substring(0, 150)}...
+                    </div>
+                  </div>
+                </label>
+              </div>
+            {:else}
+              <div class="text-gray-500 mb-3">
+                No annual report analysis available.
+              </div>
+              <button
+                on:click={() => {
+                  closeEmailDraftModal();
+                  handleAnnualReportResearch();
+                }}
+                class="px-3 py-1 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              >
+                Analyze Annual Report First
+              </button>
+            {/if}
+          </div>
+
+          <!-- Prospects Section -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold mb-3">Select Prospect</h3>
+            {#if company.prospects && company.prospects.length > 0}
+              <div class="space-y-2">
+                {#each company.prospects as prospect}
+                  <label
+                    class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedEmailProspect ===
+                    prospect
+                      ? 'bg-gray-50 border-gray-200'
+                      : ''}"
+                  >
+                    <div
+                      class="relative flex items-center justify-center w-5 h-5 mt-0.5"
+                    >
+                      <input
+                        type="radio"
+                        name="emailProspect"
+                        class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
+                        bind:group={selectedEmailProspect}
+                        value={prospect}
+                      />
+                      <div
+                        class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
+                      ></div>
+                      <svg
+                        class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
+                    </div>
+                    <div class="flex-grow">
+                      <div class="font-medium">{prospect.name}</div>
+                      <div class="text-sm text-gray-500">{prospect.title}</div>
+                      <div class="text-sm text-gray-500 mt-1">
+                        {prospect.email} • {prospect.phone}
+                      </div>
+                    </div>
+                  </label>
+                {/each}
+              </div>
+            {:else}
+              <div class="text-gray-500 mb-3">No prospects available.</div>
+              <button
+                on:click={openProspectModal}
+                class="px-3 py-1 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              >
+                Add Prospect First
+              </button>
+            {/if}
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex justify-end gap-3 mt-6">
+            <button
+              class="px-4 py-2 border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              on:click={closeEmailDraftModal}
+            >
+              Cancel
+            </button>
+            <button
+              class="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              on:click={generateEmailDraft}
+              disabled={(!selectedEmailResearch &&
+                !selectedEmailReport &&
+                !selectedEmailProspect) ||
+                loading}
+            >
+              {loading ? "Generating..." : "Generate Draft"}
+            </button>
           </div>
         </div>
       </div>

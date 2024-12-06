@@ -53,5 +53,24 @@ export const prompts = {
       4. Handling objections
       5. Next steps`,
     },
+    generate_targetcompany_emaildraft: {
+      id: "generate_targetcompany_emaildraft",
+      model: "gpt-4o-mini",
+      provider: "openai",
+      content: `Based on this company information, generate an email draft for prospect name: {{prospectName}}.
+
+      for company: {{targetcompany_research}}
+      for annual report: {{targetcompany_annualreport}}
+      for prospect: {{prospect_info}}
+
+      I am calling from {{owncompany_name}}.
+
+      Please generate a detailed cold calling guide including:
+      1. Introduction {{prospect_name}}
+      2. Value proposition
+      3. Key talking points
+      4. Handling objections
+      5. Next steps`,
+    },
   },
 };

@@ -10,6 +10,7 @@
 # {{prospectName}}: Prospect Name
 # {{targetcompany_annual_report_research}}: Annual Report Research
 # {{targetcompany_research_result}}
+# {{targetcompany_coldcallingguide}}
 
 prompts:
   targetcompany_research:

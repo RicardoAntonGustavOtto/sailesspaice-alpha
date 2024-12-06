@@ -783,6 +783,7 @@
   let selectedEmailResearch = null;
   let selectedEmailReport = null;
   let selectedEmailProspect = null;
+  let selectedEmailGuide = null;
 
   // Add these new functions
   function openEmailDraftModal() {
@@ -790,6 +791,7 @@
     selectedEmailResearch = null;
     selectedEmailReport = null;
     selectedEmailProspect = null;
+    selectedEmailGuide = null;
   }
 
   function closeEmailDraftModal() {
@@ -809,7 +811,9 @@
       const promptVariables = {
         prospectName: selectedEmailProspect?.name || "",
         targetcompany_annualreport: selectedEmailReport || "",
+        targetcompany_name: company.name,
         targetcompany_research: selectedEmailResearch?.research_content || "",
+        cold_calling_guide: selectedEmailGuide?.content || "",
         prospect_info: selectedEmailProspect
           ? `Name: ${selectedEmailProspect.name}
              Title: ${selectedEmailProspect.title}
@@ -2179,72 +2183,6 @@
         </div>
 
         <div class="space-y-6">
-          <!-- AI Research Section -->
-          <div class="border rounded-lg p-4">
-            <h3 class="font-semibold mb-3">AI Research</h3>
-            {#if company.research_result}
-              <div class="space-y-2">
-                {#each company.research_result as research}
-                  <label
-                    class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedEmailResearch ===
-                    research
-                      ? 'bg-gray-50 border-gray-200'
-                      : ''}"
-                  >
-                    <div
-                      class="relative flex items-center justify-center w-5 h-5 mt-0.5"
-                    >
-                      <input
-                        type="radio"
-                        name="emailResearch"
-                        class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
-                        bind:group={selectedEmailResearch}
-                        value={research}
-                      />
-                      <div
-                        class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
-                      ></div>
-                      <svg
-                        class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M5 13l4 4L19 7"
-                        ></path>
-                      </svg>
-                    </div>
-                    <div class="flex-grow">
-                      <div class="font-medium">
-                        Research from {new Date(
-                          research.research_date
-                        ).toLocaleDateString()}
-                      </div>
-                      <div class="text-sm text-gray-500 mt-2 line-clamp-2">
-                        {research.research_content.substring(0, 150)}...
-                      </div>
-                    </div>
-                  </label>
-                {/each}
-              </div>
-            {:else}
-              <div class="text-gray-500 mb-3">No AI research available.</div>
-              <button
-                on:click={() => {
-                  closeEmailDraftModal();
-                  handleAIResearch();
-                }}
-                class="px-3 py-1 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
-              >
-                Generate AI Research First
-              </button>
-            {/if}
-          </div>
-
           <!-- Annual Reports Section -->
           <div class="border rounded-lg p-4">
             <h3 class="font-semibold mb-3">Annual Report Analysis</h3>
@@ -2367,6 +2305,78 @@
             {/if}
           </div>
 
+          <!-- Cold Calling Guide Section -->
+          <div class="border rounded-lg p-4">
+            <h3 class="font-semibold mb-3">Cold Calling Guide</h3>
+            {#if company.cold_calling_guides && company.cold_calling_guides.length > 0}
+              <div class="space-y-2">
+                {#each company.cold_calling_guides as guide}
+                  <label
+                    class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedEmailGuide ===
+                    guide
+                      ? 'bg-gray-50 border-gray-200'
+                      : ''}"
+                  >
+                    <div
+                      class="relative flex items-center justify-center w-5 h-5 mt-0.5"
+                    >
+                      <input
+                        type="radio"
+                        name="emailGuide"
+                        class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
+                        bind:group={selectedEmailGuide}
+                        value={guide}
+                      />
+                      <div
+                        class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
+                      ></div>
+                      <svg
+                        class="absolute w-3 h-3 text-white pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity duration-200"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M5 13l4 4L19 7"
+                        ></path>
+                      </svg>
+                    </div>
+                    <div class="flex-grow">
+                      <div class="font-medium">
+                        Guide for {guide.prospect.name}
+                      </div>
+                      <div class="text-sm text-gray-500">
+                        Generated: {new Date(
+                          guide.generated_at
+                        ).toLocaleDateString()}
+                      </div>
+                      <div class="text-sm text-gray-500 mt-2 line-clamp-2">
+                        {guide.content.substring(0, 150)}...
+                      </div>
+                    </div>
+                  </label>
+                {/each}
+              </div>
+            {:else}
+              <div class="text-gray-500 mb-3">
+                No cold calling guides available.
+              </div>
+              <button
+                on:click={() => {
+                  closeEmailDraftModal();
+                  activeTab = "cold-calling";
+                  openColdCallModal();
+                }}
+                class="px-3 py-1 text-sm border border-gray-200 bg-white text-gray-900 rounded-lg hover:bg-gray-50 transition-all duration-200"
+              >
+                Generate Cold Calling Guide First
+              </button>
+            {/if}
+          </div>
+
           <!-- Action Buttons -->
           <div class="flex justify-end gap-3 mt-6">
             <button
@@ -2380,7 +2390,8 @@
               on:click={generateEmailDraft}
               disabled={(!selectedEmailResearch &&
                 !selectedEmailReport &&
-                !selectedEmailProspect) ||
+                !selectedEmailProspect &&
+                !selectedEmailGuide) ||
                 loading}
             >
               {loading ? "Generating..." : "Generate Draft"}

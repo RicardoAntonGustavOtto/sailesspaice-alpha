@@ -34,7 +34,7 @@ export const prompts = {
 
       Ensure your analysis is clear, well-structured, and provides concrete connections between the findings in the annual report and the potential solutions {{owncompany_name}} offers.`,
     },
-    cold_calling: {
+    generate_targetcompany_coldcallingguide: {
       id: "generate_targetcompany_coldcallingguide",
       model: "gpt-4o-mini",
       provider: "openai",

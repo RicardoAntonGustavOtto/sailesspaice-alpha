@@ -20,7 +20,7 @@ export async function callProxy(message, modelProvider, modelName) {
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ message, model: modelName }),
+      body: JSON.stringify({ message, modelName }),
     });
 
     if (!response.ok) {

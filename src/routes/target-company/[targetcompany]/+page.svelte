@@ -468,28 +468,35 @@
         throw new Error("Company name not loaded yet. Please try again.");
       }
 
-      // Get the right prompt
+      // Create the variables object
+      const promptVariables = {
+        prospectName: selectedProspect?.name || "", // Changed from prospect_name
+        targetcompany_annualreport: selectedReport || "", // Changed from targetcompany_annualreport_research
+        targetcompany_research: selectedResearch?.research_content || "",
+        prospect_info: selectedProspect
+          ? `Name: ${selectedProspect.name}
+             Title: ${selectedProspect.title}
+             Email: ${selectedProspect.email}
+             Phone: ${selectedProspect.phone}
+             Notes: ${selectedProspect.notes}`
+          : "",
+        owncompany_name: $ownCompany.name,
+      };
+
+      // Debug log
+      console.log("Prompt Variables:", promptVariables);
+
+      // Get the prompt
       const { prompt, model, provider } = getPrompt(
         "generate_targetcompany_coldcallingguide",
-        {
-          prospect_name: selectedProspect
-            ? ` for ${selectedProspect.name}`
-            : "",
-          targetcompany_research: selectedResearch
-            ? `Research:\n${selectedResearch}\n`
-            : "",
-          targetcompany_annualreport: selectedReport
-            ? `Annual Report:\n${selectedReport}\n`
-            : "",
-          prospect_info: selectedProspect ? `...` : "",
-          owncompany_name: $ownCompany.name,
-          prospectPlaceholder: !selectedProspect
-            ? " (Use [PROSPECT NAME] as placeholder)"
-            : "",
-        }
+        promptVariables
       );
 
-      const guideContent = await callProxy(prompt, provider, model);
+      // Debug log
+      console.log("Generated Prompt:", prompt);
+
+      const response = await callProxy(prompt, provider, model);
+      const guideContent = response.choices?.[0]?.message?.content || response;
 
       const guide = {
         id: crypto.randomUUID(),
@@ -1724,11 +1731,11 @@
           <!-- Annual Reports Section -->
           <div class="border rounded-lg p-4">
             <h3 class="font-semibold mb-3">Annual Reports</h3>
-            {#if company.annual_report && company.annual_report.content}
+            {#if company.annual_report_research && company.annual_report_research}
               <div class="space-y-2">
                 <label
                   class="flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg cursor-pointer border border-transparent hover:border-gray-200 transition-all duration-200 {selectedReport ===
-                  company.annual_report.content
+                  company.annual_report_research
                     ? 'bg-gray-50 border-gray-200'
                     : ''}"
                 >
@@ -1740,7 +1747,7 @@
                       name="report"
                       class="peer absolute opacity-0 w-5 h-5 cursor-pointer"
                       bind:group={selectedReport}
-                      value={company.annual_report.content}
+                      value={company.annual_report_research}
                     />
                     <div
                       class="w-5 h-5 border-2 border-gray-300 rounded peer-checked:border-black peer-checked:bg-black transition-all duration-200"
@@ -1761,12 +1768,7 @@
                   </div>
                   <div class="flex-grow">
                     <div class="font-medium">
-                      {company.annual_report.fileName}
-                    </div>
-                    <div class="text-sm text-gray-500">
-                      {company.annual_report.type === "pdf"
-                        ? "PDF Document"
-                        : "Text Document"}
+                      {company.annual_report_research.substring(0, 150)}...
                     </div>
                   </div>
                 </label>
@@ -1786,7 +1788,7 @@
                   );
                 }}
               >
-                Upload Annual Report First
+                Upload Annual Report Research
               </label>
             {/if}
           </div>

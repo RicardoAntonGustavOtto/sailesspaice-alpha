@@ -813,7 +813,7 @@
         targetcompany_annualreport: selectedEmailReport || "",
         targetcompany_name: company.name,
         targetcompany_research: selectedEmailResearch?.research_content || "",
-        cold_calling_guide: selectedEmailGuide?.content || "",
+        targetcompany_coldcallingguide: selectedEmailGuide?.content || "",
         prospect_info: selectedEmailProspect
           ? `Name: ${selectedEmailProspect.name}
              Title: ${selectedEmailProspect.title}

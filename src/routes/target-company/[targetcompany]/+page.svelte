@@ -471,7 +471,7 @@
 
       // Create the variables object
       const promptVariables = {
-        prospectName: selectedProspect?.name || "", // Changed from prospect_name
+        prospect_name: selectedProspect?.name || "", // Changed from prospect_name
         targetcompany_annualreport: selectedReport || "", // Changed from targetcompany_annualreport_research
         targetcompany_research: selectedResearch?.research_content || "",
         prospect_info: selectedProspect

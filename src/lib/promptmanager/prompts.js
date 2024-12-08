@@ -38,7 +38,7 @@ export const prompts = {
       id: "generate_targetcompany_coldcallingguide",
       model: "gpt-4o-mini",
       provider: "openai",
-      content: `Based on this company information, generate a cold calling script prospect name: {{prospectName}}.
+      content: `Based on this company information, generate a cold calling script prospect name: {{prospect_name}}.
 
       for company: {{targetcompany_research}}
       for annual report: {{targetcompany_annualreport}}
@@ -57,15 +57,15 @@ export const prompts = {
       id: "prospecting_email",
       model: "gpt-4o",
       provider: "openai",
-      content: `You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospectName}} from the company {{targetcompany_name}}.
+      content: `You are an expert sales assistant. I want you to write a "Cold Calling Guide" for a sales executive from the company {{owncompany_name}} to have as a reference when calling his prospect, named {{prospect_name}} from the company {{targetcompany_name}}.
 
       In order to understand the two companies, study info about the sales executive's company, {{owncompany_name}}, here: {{owncompany_info}}
 
       And now that you have read that, please read this information about {{targetcompany_name}} here: {{targetcompany_research_result}}
 
-      Finally, read this info about the prospect, {{prospectName}}, here: {{prospect_info}}
+      Finally, read this info about the prospect, {{prospect_name}}, here: {{prospect_info}}
 
-      Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospectName}} if it seems relevant and professional.
+      Now that you have completed your research, write the "Cold Calling Guide" with the following sections:(1) Hook: A "hook" to get the prospect's interest in talking to the sales executive. This should combine a business benefit of {{owncompany_name}} with recent news about {{targetcompany_name}}, if available. Include information you learned about {{prospect_name}} if it seems relevant and professional.
 
       (2) Overview: An easy-to-read overview of {{owncompany_name}}’s benefits, related specifically to the prospect's business challenges. Present this as a table with gridlines to improve readability. Be as specific as possible, citing sources for the {{targetcompany_name}}'s business challenges/focus if available.
 

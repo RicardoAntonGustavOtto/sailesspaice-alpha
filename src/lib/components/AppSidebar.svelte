@@ -43,4 +43,4 @@
 </div>
 
 <!-- Spacer div to prevent content from going under the fixed sidebar -->
-<div class={isCollapsed ? "w-16" : "w-64"} />
+<div class={isCollapsed ? "w-16" : "w-64"}></div>
